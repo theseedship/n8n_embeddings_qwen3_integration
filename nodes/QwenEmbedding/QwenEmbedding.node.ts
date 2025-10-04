@@ -53,25 +53,35 @@ class QwenEmbeddings extends Embeddings {
 			requestBody.instruction = this.instruction;
 		}
 
-		const response = await fetch(`${this.apiUrl}/embed`, {
-			method: 'POST',
-			headers,
-			body: JSON.stringify(requestBody),
-			signal: AbortSignal.timeout(this.timeout),
-		});
+		// Use a simple timeout promise wrapper for Node.js compatibility
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-		if (!response.ok) {
-			const error = await response.text();
-			throw new Error(`Qwen Embedding API error (${response.status}): ${error}`);
+		try {
+			const response = await fetch(`${this.apiUrl}/embed`, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(requestBody),
+				signal: controller.signal,
+			});
+			clearTimeout(timeoutId);
+
+			if (!response.ok) {
+				const error = await response.text();
+				throw new Error(`Qwen Embedding API error (${response.status}): ${error}`);
+			}
+
+			const data = await response.json() as { embeddings?: number[][] };
+
+			if (!data.embeddings || !Array.isArray(data.embeddings)) {
+				throw new Error('Invalid response from Qwen server: missing embeddings array');
+			}
+
+			return data.embeddings;
+		} catch (error) {
+			clearTimeout(timeoutId);
+			throw error;
 		}
-
-		const data = await response.json() as { embeddings?: number[][] };
-
-		if (!data.embeddings || !Array.isArray(data.embeddings)) {
-			throw new Error('Invalid response from Qwen server: missing embeddings array');
-		}
-
-		return data.embeddings;
 	}
 
 	async embedDocuments(documents: string[]): Promise<number[][]> {
