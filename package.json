@@ -1,19 +1,31 @@
 {
-  "name": "n8n-nodes-<...>",
+  "name": "n8n-nodes-qwen-embedding",
   "version": "0.1.0",
-  "description": "",
+  "description": "n8n nodes for Qwen3-Embedding model integration - Generate text embeddings using self-hosted Qwen models",
   "keywords": [
-    "n8n-community-node-package"
+    "n8n-community-node-package",
+    "n8n",
+    "n8n-nodes",
+    "qwen",
+    "embeddings",
+    "vector",
+    "ai",
+    "langchain",
+    "vector-store",
+    "nlp"
   ],
   "license": "MIT",
-  "homepage": "",
+  "homepage": "https://github.com/gabzim/n8n-nodes-qwen-embedding",
   "author": {
-    "name": "",
-    "email": ""
+    "name": "Gabriel Zimmermann",
+    "email": "gabzim@users.noreply.github.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/<...>/n8n-nodes-<...>.git"
+    "url": "git+https://github.com/gabzim/n8n-nodes-qwen-embedding.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gabzim/n8n-nodes-qwen-embedding/issues"
   },
   "engines": {
     "node": ">=20.15"
@@ -33,12 +45,11 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/ExampleCredentialsApi.credentials.js",
-      "dist/credentials/HttpBinApi.credentials.js"
+      "dist/credentials/QwenApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/ExampleNode/ExampleNode.node.js",
-      "dist/nodes/HttpBin/HttpBin.node.js"
+      "dist/nodes/QwenEmbedding/QwenEmbedding.node.js",
+      "dist/nodes/QwenEmbeddingTool/QwenEmbeddingTool.node.js"
     ]
   },
   "devDependencies": {
@@ -51,5 +62,9 @@
   },
   "peerDependencies": {
     "n8n-workflow": "*"
+  },
+  "dependencies": {
+    "n8n": "^1.113.3",
+    "@langchain/core": "^0.3.0"
   }
 }

@@ -1,8 +1,48 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# n8n local data
+.n8n/
+
+# Cache
+.cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
-.tmp
-tmp
-dist
+Thumbs.db
+
+# Logs
+*.log
 npm-debug.log*
-yarn.lock
-.vscode/launch.json
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Temporary files
+*.tmp
+*.temp
