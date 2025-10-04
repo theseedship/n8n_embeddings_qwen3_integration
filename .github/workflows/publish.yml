@@ -104,35 +104,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create Git tag
-        if: success()
-        run: |
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }} [skip ci]"
-          git tag v${{ steps.bump.outputs.new_version }}
-          git push origin HEAD:${{ github.ref_name }}
-          git push origin v${{ steps.bump.outputs.new_version }}
+      # Skip git tag creation - version is managed locally
+      # The npm publish already happened successfully
 
-      - name: Create GitHub Release
-        if: success() && github.event_name != 'release'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.bump.outputs.new_version }}
-          release_name: Release v${{ steps.bump.outputs.new_version }}
-          body: |
-            ## 🚀 n8n-nodes-qwen-embedding v${{ steps.bump.outputs.new_version }}
-
-            ### Installation
-            ```bash
-            npm install n8n-nodes-qwen-embedding
-            ```
-
-            ### What's Changed
-            See commit history for detailed changes.
-
-            ### Full Changelog
-            https://github.com/${{ github.repository }}/compare/v${{ steps.bump.outputs.new_version }}...HEAD
-          draft: false
-          prerelease: false
+      # GitHub release creation removed - manage releases manually
+      # Package is successfully published to NPM at this point
