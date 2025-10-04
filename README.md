@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/npm/l/n8n-nodes-qwen-embedding)](https://github.com/theseedship/deposium_n8n_embeddings_integration/blob/master/LICENSE)
 [![n8n Community](https://img.shields.io/badge/n8n-community_node-orange)](https://n8n.io/integrations)
 
-n8n community nodes for integrating Qwen3-Embedding models with your n8n workflows. Generate high-quality text embeddings using self-hosted Qwen models for vector stores, similarity search, and AI applications.
+n8n community nodes for integrating Qwen embeddings via Ollama with your n8n workflows. Generate high-quality text embeddings using Ollama-hosted Qwen models for vector stores, similarity search, and AI applications.
 
 ## 🌟 Features
 
@@ -15,7 +15,8 @@ n8n community nodes for integrating Qwen3-Embedding models with your n8n workflo
 - **Flexible Dimensions**: Support for 32-1024 dimensions via MRL (Matryoshka Representation Learning)
 - **Instruction-Aware**: Optimized embeddings for queries vs documents
 - **Batch Processing**: Efficient bulk embedding generation
-- **Self-Hosted**: Complete control over your embedding infrastructure
+- **Ollama Integration**: Direct connection to Ollama for embedding generation
+- **No Middleware Required**: Works directly with Ollama's API endpoints
 
 ## 📦 Installation
 
@@ -33,27 +34,35 @@ npm install n8n-nodes-qwen-embedding
 
 ## 🚀 Prerequisites
 
-You need to run the Qwen3-Embedding server. A sample server implementation is provided:
+You need to have Ollama installed and running with a Qwen model:
 
-```python
-# qwen3_embedding_server.py
-pip install fastapi uvicorn torch transformers
+1. **Install Ollama**: Visit [https://ollama.com](https://ollama.com) for installation instructions
 
-# Run the server
-python qwen3_embedding_server.py
+2. **Pull a Qwen model**:
+```bash
+# Choose one of these models based on your needs:
+ollama pull qwen2.5:0.5b  # Smallest, fastest
+ollama pull qwen2.5:1.5b  # Balanced
+ollama pull qwen2.5:7b    # Best quality
 ```
 
-The server will be available at `http://localhost:8080`
+3. **Verify Ollama is running**:
+```bash
+ollama list  # Should show your pulled models
+```
+
+Ollama will be available at `http://localhost:11434` by default
 
 ## 🔧 Setup
 
 ### 1. Configure Credentials
 
 1. In n8n, go to **Credentials** > **New**
-2. Select **Qwen Embedding API**
+2. Select **Qwen Embedding API (Ollama)**
 3. Enter:
-   - **API URL**: `http://localhost:8080` (or your server URL)
-   - **API Key**: (optional, if you've configured authentication)
+   - **Ollama URL**: `http://localhost:11434` (or your Ollama URL)
+   - **Model Name**: `qwen2.5:0.5b` (or your chosen model)
+   - **API Key**: (optional, only if your Ollama requires authentication)
 4. Click **Test Connection** to verify
 
 ### 2. Using the Nodes
@@ -149,11 +158,11 @@ Use in any workflow for direct embedding generation:
 
 ### Model Information
 
-- **Model**: Qwen3-Embedding-0.6B
-- **Parameters**: 570M
-- **Context Length**: 32K tokens
+- **Models**: Qwen2.5 series (0.5B, 1.5B, 3B, 7B, 14B, 32B, 72B)
+- **Context Length**: Varies by model
 - **Languages**: 29+ languages supported
-- **Dimensions**: Variable 32-1024 (MRL)
+- **Dimensions**: Varies by model (typically 896-1536)
+- **Provider**: Ollama (local inference)
 
 ### Performance
 

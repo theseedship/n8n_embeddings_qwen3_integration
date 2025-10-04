@@ -7,17 +7,26 @@ import {
 
 export class QwenApi implements ICredentialType {
 	name = 'qwenApi';
-	displayName = 'Qwen Embedding API';
-	documentationUrl = 'https://github.com/QwenLM/Qwen3-Embedding';
+	displayName = 'Qwen Embedding API (Ollama)';
+	documentationUrl = 'https://ollama.com/library/qwen2.5';
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'API URL',
+			displayName: 'Ollama URL',
 			name: 'apiUrl',
 			type: 'string',
-			default: 'http://localhost:8080',
-			placeholder: 'http://localhost:8080',
-			description: 'The base URL of your self-hosted Qwen3-Embedding server',
+			default: 'http://localhost:11434',
+			placeholder: 'http://localhost:11434',
+			description: 'The base URL of your Ollama instance',
+			required: true,
+		},
+		{
+			displayName: 'Model Name',
+			name: 'modelName',
+			type: 'string',
+			default: 'qwen2.5:0.5b',
+			placeholder: 'e.g., Qwen/Qwen3-Embedding-0.6B, qwen2.5:0.5b, qwen2.5:1.5b',
+			description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
 			required: true,
 		},
 		{
@@ -28,7 +37,7 @@ export class QwenApi implements ICredentialType {
 				password: true,
 			},
 			default: '',
-			description: 'Optional API key for authentication (leave empty if not required)',
+			description: 'Optional API key if your Ollama instance requires authentication',
 			required: false,
 		},
 	];
@@ -43,11 +52,11 @@ export class QwenApi implements ICredentialType {
 		},
 	};
 
-	// Test the credentials by calling the health endpoint
+	// Test the credentials by listing models
 	test: ICredentialTestRequest = {
 		request: {
 			baseURL: '={{$credentials.apiUrl}}',
-			url: '/health',
+			url: '/api/tags',
 			method: 'GET',
 			skipSslCertificateValidation: true,
 		},
@@ -55,9 +64,9 @@ export class QwenApi implements ICredentialType {
 			{
 				type: 'responseSuccessBody',
 				properties: {
-					key: 'status',
-					value: 'healthy',
-					message: 'Connected to Qwen3-Embedding server successfully!',
+					key: 'models',
+					value: undefined,
+					message: 'Connected to Ollama successfully! Make sure your Qwen model is pulled.',
 				},
 			},
 		],

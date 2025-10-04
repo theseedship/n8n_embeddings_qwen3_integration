@@ -7,13 +7,11 @@ import type {
 import { NodeOperationError } from 'n8n-workflow';
 import { Embeddings, EmbeddingsParams } from '@langchain/core/embeddings';
 
-// LangChain-compatible Qwen Embeddings class
+// LangChain-compatible Ollama Qwen Embeddings class
 class QwenEmbeddings extends Embeddings {
 	apiUrl: string;
 	apiKey?: string;
-	dimensions: number;
-	instruction?: string;
-	prefix?: string;
+	modelName: string;
 	maxRetries: number;
 	timeout: number;
 
@@ -21,14 +19,12 @@ class QwenEmbeddings extends Embeddings {
 		super(params);
 		this.apiUrl = params.apiUrl;
 		this.apiKey = params.apiKey;
-		this.dimensions = params.dimensions || 1024;
-		this.instruction = params.instruction;
-		this.prefix = params.prefix;
+		this.modelName = params.modelName || 'qwen2.5:0.5b';
 		this.maxRetries = params.maxRetries || 3;
 		this.timeout = params.timeout || 30000;
 	}
 
-	private async callEmbedAPI(texts: string[]): Promise<number[][]> {
+	private async callOllamaEmbedAPI(texts: string[]): Promise<number[][]> {
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 		};
@@ -37,79 +33,62 @@ class QwenEmbeddings extends Embeddings {
 			headers['Authorization'] = `Bearer ${this.apiKey}`;
 		}
 
-		const requestBody: any = {
-			texts: texts.map(text => {
-				if (this.prefix) {
-					return `${this.prefix} ${text}`;
-				}
-				return text;
-			}),
-		};
-
-		if (this.dimensions !== 1024) {
-			requestBody.dimensions = this.dimensions;
-		}
-
-		if (this.instruction) {
-			requestBody.instruction = this.instruction;
-		}
-
-		// Use a simple timeout promise wrapper for Node.js compatibility
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-		try {
-			const response = await fetch(`${this.apiUrl}/embed`, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify(requestBody),
-				signal: controller.signal,
-			});
-			clearTimeout(timeoutId);
-
-			if (!response.ok) {
-				const error = await response.text();
-				const err = new Error(`Qwen Embedding API error (${response.status}): ${error}`);
-				(err as any).statusCode = response.status;
-				throw err;
-			}
-
-			const data = await response.json() as { embeddings?: number[][] };
-
-			if (!data.embeddings || !Array.isArray(data.embeddings)) {
-				const err = new Error('Invalid response from Qwen server: missing embeddings array');
-				(err as any).statusCode = 500;
-				throw err;
-			}
-
-			return data.embeddings;
-		} catch (error) {
-			clearTimeout(timeoutId);
-			throw error;
-		}
-	}
-
-	async embedDocuments(documents: string[]): Promise<number[][]> {
-		// Qwen server supports batch embedding
-		const batches: string[][] = [];
-		const batchSize = 32; // Adjust based on server capacity
-
-		for (let i = 0; i < documents.length; i += batchSize) {
-			batches.push(documents.slice(i, i + batchSize));
-		}
-
 		const embeddings: number[][] = [];
 
-		for (const batch of batches) {
-			const batchEmbeddings = await this.callEmbedAPI(batch);
-			embeddings.push(...batchEmbeddings);
+		// Ollama doesn't support batch embeddings, so we need to call it for each text
+		for (const text of texts) {
+			const requestBody = {
+				model: this.modelName,
+				input: text,
+			};
+
+			// Use a simple timeout promise wrapper for Node.js compatibility
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+			try {
+				const response = await fetch(`${this.apiUrl}/api/embed`, {
+					method: 'POST',
+					headers,
+					body: JSON.stringify(requestBody),
+					signal: controller.signal,
+				});
+				clearTimeout(timeoutId);
+
+				if (!response.ok) {
+					const error = await response.text();
+					const err = new Error(`Ollama API error (${response.status}): ${error}`);
+					(err as any).statusCode = response.status;
+					throw err;
+				}
+
+				const data = await response.json() as { embeddings?: number[][], embedding?: number[] };
+
+				// Ollama returns a single embedding array
+				if (data.embeddings && Array.isArray(data.embeddings)) {
+					embeddings.push(data.embeddings[0]);
+				} else if (data.embedding && Array.isArray(data.embedding)) {
+					embeddings.push(data.embedding);
+				} else {
+					const err = new Error('Invalid response from Ollama: missing embedding data');
+					(err as any).statusCode = 500;
+					throw err;
+				}
+			} catch (error) {
+				clearTimeout(timeoutId);
+				throw error;
+			}
 		}
 
 		return embeddings;
 	}
 
+	async embedDocuments(documents: string[]): Promise<number[][]> {
+		return this.callOllamaEmbedAPI(documents);
+	}
+
 	async embedQuery(document: string): Promise<number[]> {
-		const embeddings = await this.callEmbedAPI([document]);
+		const embeddings = await this.callOllamaEmbedAPI([document]);
 		return embeddings[0];
 	}
 }
@@ -117,6 +96,7 @@ class QwenEmbeddings extends Embeddings {
 interface QwenEmbeddingsParams extends EmbeddingsParams {
 	apiUrl: string;
 	apiKey?: string;
+	modelName?: string;
 	dimensions?: number;
 	instruction?: string;
 	prefix?: string;
@@ -244,6 +224,7 @@ export class QwenEmbedding implements INodeType {
 			const embeddings = new QwenEmbeddings({
 				apiUrl: credentials.apiUrl as string,
 				apiKey: credentials.apiKey as string | undefined,
+				modelName: credentials.modelName as string | undefined,
 				dimensions: options.dimensions || 1024,
 				instruction: options.instruction !== 'none' ? options.instruction : undefined,
 				prefix: options.prefix,

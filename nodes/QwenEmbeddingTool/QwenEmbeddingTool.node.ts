@@ -175,6 +175,7 @@ export class QwenEmbeddingTool implements INodeType {
 
 		const credentials = await this.getCredentials('qwenApi');
 		const apiUrl = credentials.apiUrl as string;
+		const modelName = (credentials.modelName as string) || 'qwen2.5:0.5b';
 
 		const operation = this.getNodeParameter('operation', 0) as string;
 
@@ -237,70 +238,71 @@ export class QwenEmbeddingTool implements INodeType {
 					texts = texts.map(text => `${options.prefix} ${text}`);
 				}
 
-				// Prepare request body
-				const requestBody: any = {
-					texts: texts,
-				};
-
-				if (options.dimensions && options.dimensions !== 1024) {
-					// Validate dimension range
-					if (options.dimensions < 32 || options.dimensions > 1024) {
-						throw new NodeOperationError(
-							this.getNode(),
-							'Dimensions must be between 32 and 1024',
-							{ itemIndex }
-						);
-					}
-					requestBody.dimensions = options.dimensions;
-				}
-
+				// Apply instruction type if specified
 				if (options.instruction && options.instruction !== 'none') {
-					requestBody.instruction = options.instruction;
+					const instructionPrefix = options.instruction === 'query'
+						? 'Instruct: Retrieve semantically similar text.\nQuery: '
+						: 'Instruct: Represent this document for retrieval.\nDocument: ';
+					texts = texts.map(text => instructionPrefix + text);
 				}
 
-				// Make HTTP request to Qwen embedding server
-				const requestOptions: IHttpRequestOptions = {
-					method: 'POST',
-					url: `${apiUrl}/embed`,
-					body: requestBody,
-					json: true,
-					returnFullResponse: false,
-					timeout: 30000, // 30 second timeout
-				};
+				// Ollama doesn't support batch embeddings, so we need to call it for each text
+				const embeddings: number[][] = [];
 
-				let response: any;
-				try {
-					response = await this.helpers.httpRequestWithAuthentication.call(
-						this,
-						'qwenApi',
-						requestOptions,
-					);
-				} catch (error: any) {
-					// Handle specific error cases
-					if (error.message?.includes('ECONNREFUSED')) {
+				for (const text of texts) {
+					// Prepare request body for Ollama
+					const requestBody = {
+						model: modelName,
+						input: text,
+					};
+
+					// Make HTTP request to Ollama embedding API
+					const requestOptions: IHttpRequestOptions = {
+						method: 'POST',
+						url: `${apiUrl}/api/embed`,
+						body: requestBody,
+						json: true,
+						returnFullResponse: false,
+						timeout: 30000, // 30 second timeout
+					};
+
+					let response: any;
+					try {
+						response = await this.helpers.httpRequestWithAuthentication.call(
+							this,
+							'qwenApi',
+							requestOptions,
+						);
+					} catch (error: any) {
+						// Handle specific error cases
+						if (error.message?.includes('ECONNREFUSED')) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`Cannot connect to Ollama at ${apiUrl}. Please ensure Ollama is running.`,
+								{ itemIndex }
+							);
+						}
+						if (error.statusCode === 404) {
+							throw new NodeOperationError(
+								this.getNode(),
+								`Model ${modelName} not found. Please pull it first with: ollama pull ${modelName}`,
+								{ itemIndex }
+							);
+						}
+						throw error;
+					}
+
+					// Validate response and extract embedding
+					if (!response || !response.embeddings) {
 						throw new NodeOperationError(
 							this.getNode(),
-							`Cannot connect to Qwen server at ${apiUrl}. Please ensure the server is running.`,
+							'Invalid response from Ollama: missing embeddings',
 							{ itemIndex }
 						);
 					}
-					if (error.statusCode === 500) {
-						throw new NodeOperationError(
-							this.getNode(),
-							'Qwen server error. Check server logs for details.',
-							{ itemIndex }
-						);
-					}
-					throw error;
-				}
 
-				// Validate response
-				if (!response || !response.embeddings || !Array.isArray(response.embeddings)) {
-					throw new NodeOperationError(
-						this.getNode(),
-						'Invalid response from Qwen server: missing embeddings array',
-						{ itemIndex }
-					);
+					// Ollama returns embeddings directly
+					embeddings.push(response.embeddings);
 				}
 
 				// Format output based on options
@@ -312,21 +314,21 @@ export class QwenEmbeddingTool implements INodeType {
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embedding: response.embeddings[0],
+							embedding: embeddings[0],
 						};
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							text: texts[0],
-							vector: response.embeddings[0],
-							dimensions: response.dimensions || response.embeddings[0].length,
+							vector: embeddings[0],
+							dimensions: embeddings[0].length,
 						};
 					} else {
 						// Full response
 						outputItem = {
-							embedding: response.embeddings[0],
-							dimensions: response.dimensions || response.embeddings[0].length,
+							embedding: embeddings[0],
+							dimensions: embeddings[0].length,
 							text: texts[0],
-							model: response.model || 'Qwen3-Embedding-0.6B',
+							model: modelName,
 						};
 
 						// Add optional metadata
@@ -335,7 +337,6 @@ export class QwenEmbeddingTool implements INodeType {
 								prefix: options.prefix || '',
 								instruction: options.instruction || 'none',
 								timestamp: new Date().toISOString(),
-								processingTime: response.processing_time,
 							};
 						}
 					}
@@ -350,22 +351,22 @@ export class QwenEmbeddingTool implements INodeType {
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embeddings: response.embeddings,
+							embeddings: embeddings,
 						};
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							count: texts.length,
-							vectors: response.embeddings,
-							dimensions: response.dimensions || (response.embeddings[0] ? response.embeddings[0].length : 0),
+							vectors: embeddings,
+							dimensions: embeddings[0] ? embeddings[0].length : 0,
 						};
 					} else {
 						// Full response
 						outputItem = {
-							embeddings: response.embeddings,
+							embeddings: embeddings,
 							texts: texts,
 							count: texts.length,
-							dimensions: response.dimensions || (response.embeddings[0] ? response.embeddings[0].length : 0),
-							model: response.model || 'Qwen3-Embedding-0.6B',
+							dimensions: embeddings[0] ? embeddings[0].length : 0,
+							model: modelName,
 						};
 
 						// Add optional metadata
@@ -374,17 +375,16 @@ export class QwenEmbeddingTool implements INodeType {
 								prefix: options.prefix || '',
 								instruction: options.instruction || 'none',
 								timestamp: new Date().toISOString(),
-								processingTime: response.processing_time,
 								batchSize: texts.length,
 							};
 						}
 					}
 
 					// Also add individual items if needed for further processing
-					if (returnFormat === 'full' && texts.length === response.embeddings.length) {
+					if (returnFormat === 'full' && texts.length === embeddings.length) {
 						outputItem.items = texts.map((text, idx) => ({
 							text: text,
-							embedding: response.embeddings[idx],
+							embedding: embeddings[idx],
 						}));
 					}
 
