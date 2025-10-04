@@ -4,6 +4,7 @@ import type {
 	SupplyData,
 	ISupplyDataFunctions,
 } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 import { Embeddings, EmbeddingsParams } from '@langchain/core/embeddings';
 
 // LangChain-compatible Qwen Embeddings class
@@ -68,13 +69,17 @@ class QwenEmbeddings extends Embeddings {
 
 			if (!response.ok) {
 				const error = await response.text();
-				throw new Error(`Qwen Embedding API error (${response.status}): ${error}`);
+				const err = new Error(`Qwen Embedding API error (${response.status}): ${error}`);
+				(err as any).statusCode = response.status;
+				throw err;
 			}
 
 			const data = await response.json() as { embeddings?: number[][] };
 
 			if (!data.embeddings || !Array.isArray(data.embeddings)) {
-				throw new Error('Invalid response from Qwen server: missing embeddings array');
+				const err = new Error('Invalid response from Qwen server: missing embeddings array');
+				(err as any).statusCode = 500;
+				throw err;
 			}
 
 			return data.embeddings;
@@ -225,28 +230,32 @@ export class QwenEmbedding implements INodeType {
 	};
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
-		const credentials = await this.getCredentials('qwenApi');
+		try {
+			const credentials = await this.getCredentials('qwenApi');
 
-		const options = this.getNodeParameter('options', itemIndex, {}) as {
-			prefix?: string;
-			dimensions?: number;
-			instruction?: string;
-			maxRetries?: number;
-			timeout?: number;
-		};
+			const options = this.getNodeParameter('options', itemIndex, {}) as {
+				prefix?: string;
+				dimensions?: number;
+				instruction?: string;
+				maxRetries?: number;
+				timeout?: number;
+			};
 
-		const embeddings = new QwenEmbeddings({
-			apiUrl: credentials.apiUrl as string,
-			apiKey: credentials.apiKey as string | undefined,
-			dimensions: options.dimensions || 1024,
-			instruction: options.instruction !== 'none' ? options.instruction : undefined,
-			prefix: options.prefix,
-			maxRetries: options.maxRetries || 3,
-			timeout: options.timeout || 30000,
-		});
+			const embeddings = new QwenEmbeddings({
+				apiUrl: credentials.apiUrl as string,
+				apiKey: credentials.apiKey as string | undefined,
+				dimensions: options.dimensions || 1024,
+				instruction: options.instruction !== 'none' ? options.instruction : undefined,
+				prefix: options.prefix,
+				maxRetries: options.maxRetries || 3,
+				timeout: options.timeout || 30000,
+			});
 
-		return {
-			response: embeddings,
-		};
+			return {
+				response: embeddings,
+			};
+		} catch (error) {
+			throw new NodeOperationError(this.getNode(), `Failed to initialize Qwen embeddings: ${error.message}`);
+		}
 	}
 }

@@ -40,11 +40,13 @@ export class QwenEmbeddingTool implements INodeType {
 						name: 'Generate Embedding',
 						value: 'generateEmbedding',
 						description: 'Generate embedding for a single text',
+						action: 'Generate embedding for a single text',
 					},
 					{
 						name: 'Generate Batch Embeddings',
 						value: 'generateBatch',
 						description: 'Generate embeddings for multiple texts',
+						action: 'Generate embeddings for multiple texts',
 					},
 				],
 			},
@@ -108,6 +110,13 @@ export class QwenEmbeddingTool implements INodeType {
 						hint: 'Qwen3 supports flexible dimensions from 32 to 1024 without retraining',
 					},
 					{
+						displayName: 'Include Metadata',
+						name: 'includeMetadata',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to include model metadata in the output',
+					},
+					{
 						displayName: 'Instruction Type',
 						name: 'instruction',
 						type: 'options',
@@ -130,13 +139,6 @@ export class QwenEmbeddingTool implements INodeType {
 								description: 'For documents being indexed',
 							},
 						],
-					},
-					{
-						displayName: 'Include Metadata',
-						name: 'includeMetadata',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to include model metadata in the output',
 					},
 					{
 						displayName: 'Return Format',
