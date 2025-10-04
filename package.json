@@ -15,17 +15,17 @@
     "nlp"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/gabzim/n8n-nodes-qwen-embedding",
+  "homepage": "https://github.com/theseedship/deposium_n8n_embeddings_integration",
   "author": {
     "name": "Gabriel Zimmermann",
     "email": "gabzim@users.noreply.github.com"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gabzim/n8n-nodes-qwen-embedding.git"
+    "url": "git+https://github.com/theseedship/deposium_n8n_embeddings_integration.git"
   },
   "bugs": {
-    "url": "https://github.com/gabzim/n8n-nodes-qwen-embedding/issues"
+    "url": "https://github.com/theseedship/deposium_n8n_embeddings_integration/issues"
   },
   "engines": {
     "node": ">=20.15"
