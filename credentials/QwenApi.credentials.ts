@@ -7,7 +7,7 @@ import {
 
 export class QwenApi implements ICredentialType {
 	name = 'qwenApi';
-	displayName = 'Qwen Embedding API (Ollama)';
+	displayName = 'Qwen Embedding (Ollama) API';
 	documentationUrl = 'https://ollama.com/library/qwen2.5';
 
 	properties: INodeProperties[] = [
