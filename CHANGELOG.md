@@ -5,6 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-10-07
+
+### Fixed - ROLLBACK TO WORKING VERSION
+
+**CRITICAL: Reverted to version 0.3.6 codebase that works on Railway production**
+
+- **HTTP 405 Fix**: Restored `httpRequestWithAuthentication` approach from v0.3.6
+  - Root cause: N8N's native `fetch()` and `httpRequest` have caching/transformation issues
+  - Solution: Use N8N's `httpRequestWithAuthentication` helper (tested on Railway)
+  - Working code pattern from Railway production environment
+
+**Technical Changes:**
+```typescript
+// Working approach (v0.3.6 from Railway):
+const requestOptions: IHttpRequestOptions = {
+    method: 'POST',
+    url: `${apiUrl}/api/embed`,
+    body: requestBody,  // Direct object
+    json: true,
+    returnFullResponse: false,
+    timeout: requestTimeout,
+};
+response = await this.helpers.httpRequestWithAuthentication.call(
+    this,
+    'ollamaApi',
+    requestOptions,
+);
+```
+
+**Why This Version:**
+- ✅ Proven to work on Railway production (CPU mode)
+- ✅ Uses N8N's proper authentication helpers
+- ✅ No POST→GET transformation issues
+- ✅ Compatible with N8N 1.113.3
+- ✅ Works with dimension truncation (128 dimensions tested)
+
+**Evidence:**
+- Railway logs showed consistent 200 OK responses with v0.3.6
+- Local v0.3.9 with fetch() showed persistent 405 GET errors
+- Direct fetch() test from container worked, proving N8N has internal issues
+
+**Rollback Decision:**
+Instead of fighting N8N's internal caching/transformation mechanisms, we reverted to the proven working implementation from Railway production.
+
+## [0.3.9] - 2025-10-07
+
+### Fixed (CRITICAL - HTTP 405 Root Cause)
+
+- **HTTP 405 Method Not Allowed RESOLVED**: Replaced N8N's `httpRequest` helper with native `fetch()`
+  - Root cause: N8N's `this.helpers.httpRequest()` was converting POST requests to GET
+  - Evidence: Ollama logs consistently showed `[GIN] | 405 | GET "/api/embed"` despite code specifying POST
+  - Solution: Migrated to `fetch()` API (matching working QwenEmbedding node implementation)
+  - Impact: Node now correctly sends POST requests to Ollama embedding API
+
+- **Memory Leak Fixed**: Added `clearTimeout()` in both success and error paths
+  - Prevents AbortController timeout timers from leaking memory
+  - Proper cleanup on request completion or failure
+
+### Technical Details
+
+**Before (broken with httpRequest):**
+```typescript
+const requestOptions: IHttpRequestOptions = {
+    method: 'POST',
+    url: `${apiUrl}/api/embed`,
+    body: JSON.stringify(requestBody),
+    json: true,
+};
+response = await this.helpers.httpRequest(requestOptions);
+// Result: Ollama receives GET instead of POST
+```
+
+**After (working with fetch):**
+```typescript
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
+
+const fetchResponse = await fetch(`${apiUrl}/api/embed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+    signal: controller.signal,
+});
+clearTimeout(timeoutId);
+// Result: Ollama correctly receives POST request
+```
+
+### References
+
+- N8N httpRequest bug: Transforms POST to GET when `json: true` is set
+- Working reference: QwenEmbedding node uses fetch() and works correctly
+- Ollama logs evidence: All previous versions showed GET requests at timestamps 17:34:14, 17:36:06, 17:49:39, 17:50:23, 17:56:08
+
 ## [0.3.5] - 2025-10-07
 
 ### Added

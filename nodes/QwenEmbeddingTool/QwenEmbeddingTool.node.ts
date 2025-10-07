@@ -248,7 +248,6 @@ export class QwenEmbeddingTool implements INodeType {
 
 		const credentials = await this.getCredentials('ollamaApi');
 		const apiUrl = credentials.baseUrl as string;
-		const apiKey = credentials.apiKey as string | undefined;
 		const modelName =
 			(this.getNodeParameter('modelName', 0) as string) || 'Qwen/Qwen3-Embedding-0.6B';
 
@@ -365,19 +364,11 @@ export class QwenEmbeddingTool implements INodeType {
 					const requestOptions: IHttpRequestOptions = {
 						method: 'POST',
 						url: `${apiUrl}/api/embed`,
-						body: JSON.stringify(requestBody), // Manually stringify to avoid N8N transforming POST to GET
-						json: true, // Parse response as JSON
+						body: requestBody,
+						json: true,
 						returnFullResponse: false,
 						timeout: requestTimeout,
-						headers: {
-							'Content-Type': 'application/json',
-						},
 					};
-
-					// Add Authorization header if API key is provided
-					if (apiKey) {
-						requestOptions.headers!['Authorization'] = `Bearer ${apiKey}`;
-					}
 
 					let response: any;
 					let attemptCount = 0;
@@ -386,7 +377,11 @@ export class QwenEmbeddingTool implements INodeType {
 					while (attemptCount <= maxRetries) {
 						try {
 							const requestStart = Date.now();
-							response = await this.helpers.httpRequest(requestOptions);
+							response = await this.helpers.httpRequestWithAuthentication.call(
+								this,
+								'ollamaApi',
+								requestOptions,
+							);
 
 							// Auto-detection on first successful request
 							if (performanceMode === 'auto' && embeddings.length === 0) {
@@ -449,17 +444,16 @@ export class QwenEmbeddingTool implements INodeType {
 					}
 
 					// Validate response and extract embedding
-					// Ollama returns 'embeddings' (plural) as an array
-					if (!response || !response.embeddings || !Array.isArray(response.embeddings) || response.embeddings.length === 0) {
+					if (!response || !response.embedding) {
 						throw new NodeOperationError(
 							this.getNode(),
-							'Invalid response from Ollama: missing embeddings array',
+							'Invalid response from Ollama: missing embedding',
 							{ itemIndex },
 						);
 					}
 
 					// Apply dimension adjustment if specified
-					let embedding = response.embeddings[0];
+					let embedding = response.embedding;
 					if (options.dimensions && options.dimensions > 0) {
 						const targetDim = options.dimensions;
 						const currentDim = embedding.length;

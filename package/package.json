@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-qwen-embedding",
-  "version": "0.3.1",
+  "version": "0.3.9",
   "description": "n8n nodes for Qwen3-Embedding model integration - Generate text embeddings using self-hosted Qwen models",
   "keywords": [
     "n8n-community-node-package",
@@ -38,7 +38,8 @@
     "lint": "eslint nodes package.json",
     "lintfix": "eslint nodes package.json --fix",
     "prepublishOnly": "npm run build && eslint -c .eslintrc.prepublish.js nodes package.json",
-    "test": "npm run build && npm run lint"
+    "test": "npm run build && npm run lint",
+    "prepare": "husky"
   },
   "files": [
     "dist"
@@ -57,6 +58,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-n8n-nodes-base": "^1.16.3",
     "gulp": "^5.0.0",
+    "husky": "^9.1.7",
     "n8n-workflow": "^1.67.0",
     "prettier": "^3.5.3",
     "rimraf": "^6.0.1",
@@ -67,5 +69,8 @@
   },
   "dependencies": {
     "@langchain/core": "^0.3.0"
+  },
+  "overrides": {
+    "form-data": "^4.0.4"
   }
 }
