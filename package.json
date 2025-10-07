@@ -34,19 +34,18 @@
   "scripts": {
     "build": "npx rimraf dist && tsc && gulp build:icons",
     "dev": "tsc --watch",
-    "format": "prettier nodes credentials --write",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
-    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes credentials package.json"
+    "format": "prettier nodes --write",
+    "lint": "eslint nodes package.json",
+    "lintfix": "eslint nodes package.json --fix",
+    "prepublishOnly": "npm run build && eslint -c .eslintrc.prepublish.js nodes package.json",
+    "test": "npm run build && npm run lint"
   },
   "files": [
     "dist"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": [
-      "dist/credentials/QwenApi.credentials.js"
-    ],
+    "credentials": [],
     "nodes": [
       "dist/nodes/QwenEmbedding/QwenEmbedding.node.js",
       "dist/nodes/QwenEmbeddingTool/QwenEmbeddingTool.node.js"
@@ -60,6 +59,7 @@
     "gulp": "^5.0.0",
     "n8n-workflow": "^1.67.0",
     "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
     "typescript": "^5.8.2"
   },
   "peerDependencies": {

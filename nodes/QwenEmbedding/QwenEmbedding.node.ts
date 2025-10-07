@@ -19,7 +19,7 @@ class QwenEmbeddings extends Embeddings {
 		super(params);
 		this.apiUrl = params.apiUrl;
 		this.apiKey = params.apiKey;
-		this.modelName = params.modelName || 'qwen2.5:0.5b';
+		this.modelName = params.modelName || 'Qwen/Qwen3-Embedding-0.6B';
 		this.maxRetries = params.maxRetries || 3;
 		this.timeout = params.timeout || 30000;
 	}
@@ -62,7 +62,7 @@ class QwenEmbeddings extends Embeddings {
 					throw err;
 				}
 
-				const data = await response.json() as { embeddings?: number[][], embedding?: number[] };
+				const data = (await response.json()) as { embeddings?: number[][]; embedding?: number[] };
 
 				// Ollama returns a single embedding array
 				if (data.embeddings && Array.isArray(data.embeddings)) {
@@ -120,7 +120,7 @@ export class QwenEmbedding implements INodeType {
 		outputNames: ['Embedding'],
 		credentials: [
 			{
-				name: 'qwenApi',
+				name: 'ollamaApi',
 				required: true,
 			},
 		],
@@ -138,6 +138,15 @@ export class QwenEmbedding implements INodeType {
 			},
 		},
 		properties: [
+			{
+				displayName: 'Model Name',
+				name: 'modelName',
+				type: 'string',
+				default: 'Qwen/Qwen3-Embedding-0.6B',
+				placeholder: 'e.g., Qwen/Qwen3-Embedding-0.6B, qwen2.5:0.5b, qwen2.5:1.5b',
+				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
+				required: true,
+			},
 			{
 				displayName: 'Options',
 				name: 'options',
@@ -211,7 +220,8 @@ export class QwenEmbedding implements INodeType {
 
 	async supplyData(this: ISupplyDataFunctions, itemIndex: number): Promise<SupplyData> {
 		try {
-			const credentials = await this.getCredentials('qwenApi');
+			const credentials = await this.getCredentials('ollamaApi');
+			const modelName = this.getNodeParameter('modelName', itemIndex) as string;
 
 			const options = this.getNodeParameter('options', itemIndex, {}) as {
 				prefix?: string;
@@ -222,9 +232,9 @@ export class QwenEmbedding implements INodeType {
 			};
 
 			const embeddings = new QwenEmbeddings({
-				apiUrl: credentials.apiUrl as string,
+				apiUrl: credentials.baseUrl as string,
 				apiKey: credentials.apiKey as string | undefined,
-				modelName: credentials.modelName as string | undefined,
+				modelName: modelName || 'Qwen/Qwen3-Embedding-0.6B',
 				dimensions: options.dimensions || 1024,
 				instruction: options.instruction !== 'none' ? options.instruction : undefined,
 				prefix: options.prefix,
@@ -236,7 +246,10 @@ export class QwenEmbedding implements INodeType {
 				response: embeddings,
 			};
 		} catch (error) {
-			throw new NodeOperationError(this.getNode(), `Failed to initialize Qwen embeddings: ${error.message}`);
+			throw new NodeOperationError(
+				this.getNode(),
+				`Failed to initialize Qwen embeddings: ${error.message}`,
+			);
 		}
 	}
 }

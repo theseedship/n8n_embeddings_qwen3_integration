@@ -24,11 +24,20 @@ export class QwenEmbeddingTool implements INodeType {
 		icon: { light: 'file:qwen.svg', dark: 'file:qwen.svg' },
 		credentials: [
 			{
-				name: 'qwenApi',
+				name: 'ollamaApi',
 				required: true,
 			},
 		],
 		properties: [
+			{
+				displayName: 'Model Name',
+				name: 'modelName',
+				type: 'string',
+				default: 'Qwen/Qwen3-Embedding-0.6B',
+				placeholder: 'e.g., Qwen/Qwen3-Embedding-0.6B, qwen2.5:0.5b, qwen2.5:1.5b',
+				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
+				required: true,
+			},
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -173,9 +182,10 @@ export class QwenEmbeddingTool implements INodeType {
 		const items = this.getInputData();
 		const returnData: INodeExecutionData[] = [];
 
-		const credentials = await this.getCredentials('qwenApi');
-		const apiUrl = credentials.apiUrl as string;
-		const modelName = (credentials.modelName as string) || 'qwen2.5:0.5b';
+		const credentials = await this.getCredentials('ollamaApi');
+		const apiUrl = credentials.baseUrl as string;
+		const modelName =
+			(this.getNodeParameter('modelName', 0) as string) || 'Qwen/Qwen3-Embedding-0.6B';
 
 		const operation = this.getNodeParameter('operation', 0) as string;
 
@@ -195,11 +205,9 @@ export class QwenEmbeddingTool implements INodeType {
 					// Single text embedding
 					const text = this.getNodeParameter('text', itemIndex, '') as string;
 					if (!text || text.trim() === '') {
-						throw new NodeOperationError(
-							this.getNode(),
-							'Text input cannot be empty',
-							{ itemIndex }
-						);
+						throw new NodeOperationError(this.getNode(), 'Text input cannot be empty', {
+							itemIndex,
+						});
 					}
 					texts = [text.trim()];
 				} else {
@@ -222,28 +230,31 @@ export class QwenEmbeddingTool implements INodeType {
 					}
 
 					// Validate texts
-					texts = texts.filter(t => t && t.toString().trim() !== '').map(t => t.toString().trim());
+					texts = texts
+						.filter((t) => t && t.toString().trim() !== '')
+						.map((t) => t.toString().trim());
 
 					if (texts.length === 0) {
 						throw new NodeOperationError(
 							this.getNode(),
 							'No valid texts provided for batch embedding',
-							{ itemIndex }
+							{ itemIndex },
 						);
 					}
 				}
 
 				// Apply prefix if specified
 				if (options.prefix) {
-					texts = texts.map(text => `${options.prefix} ${text}`);
+					texts = texts.map((text) => `${options.prefix} ${text}`);
 				}
 
 				// Apply instruction type if specified
 				if (options.instruction && options.instruction !== 'none') {
-					const instructionPrefix = options.instruction === 'query'
-						? 'Instruct: Retrieve semantically similar text.\nQuery: '
-						: 'Instruct: Represent this document for retrieval.\nDocument: ';
-					texts = texts.map(text => instructionPrefix + text);
+					const instructionPrefix =
+						options.instruction === 'query'
+							? 'Instruct: Retrieve semantically similar text.\nQuery: '
+							: 'Instruct: Represent this document for retrieval.\nDocument: ';
+					texts = texts.map((text) => instructionPrefix + text);
 				}
 
 				// Ollama doesn't support batch embeddings, so we need to call it for each text
@@ -270,7 +281,7 @@ export class QwenEmbeddingTool implements INodeType {
 					try {
 						response = await this.helpers.httpRequestWithAuthentication.call(
 							this,
-							'qwenApi',
+							'ollamaApi',
 							requestOptions,
 						);
 					} catch (error: any) {
@@ -279,14 +290,14 @@ export class QwenEmbeddingTool implements INodeType {
 							throw new NodeOperationError(
 								this.getNode(),
 								`Cannot connect to Ollama at ${apiUrl}. Please ensure Ollama is running.`,
-								{ itemIndex }
+								{ itemIndex },
 							);
 						}
 						if (error.statusCode === 404) {
 							throw new NodeOperationError(
 								this.getNode(),
 								`Model ${modelName} not found. Please pull it first with: ollama pull ${modelName}`,
-								{ itemIndex }
+								{ itemIndex },
 							);
 						}
 						throw error;
@@ -297,7 +308,7 @@ export class QwenEmbeddingTool implements INodeType {
 						throw new NodeOperationError(
 							this.getNode(),
 							'Invalid response from Ollama: missing embeddings',
-							{ itemIndex }
+							{ itemIndex },
 						);
 					}
 
@@ -393,7 +404,6 @@ export class QwenEmbeddingTool implements INodeType {
 						pairedItem: { item: itemIndex },
 					});
 				}
-
 			} catch (error) {
 				// Handle errors based on continueOnFail setting
 				if (this.continueOnFail()) {

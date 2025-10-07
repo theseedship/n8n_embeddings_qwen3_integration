@@ -36,12 +36,10 @@ yarn-error.log*
 coverage/
 .nyc_output
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+# Research and documentation
+research_*.md
+*.research.md
+docs/drafts/
 
 # Temporary files
 *.tmp
