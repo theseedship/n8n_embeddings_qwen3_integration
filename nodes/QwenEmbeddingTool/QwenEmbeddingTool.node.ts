@@ -313,8 +313,24 @@ export class QwenEmbeddingTool implements INodeType {
 						);
 					}
 
-					// Ollama returns embedding directly
-					embeddings.push(response.embedding);
+					// Apply dimension adjustment if specified
+					let embedding = response.embedding;
+					if (options.dimensions && options.dimensions > 0) {
+						const targetDim = options.dimensions;
+						const currentDim = embedding.length;
+
+						if (targetDim < currentDim) {
+							// Truncate to desired dimensions
+							embedding = embedding.slice(0, targetDim);
+						} else if (targetDim > currentDim) {
+							// Pad with zeros if requested dimensions exceed embedding size
+							const padding = new Array(targetDim - currentDim).fill(0);
+							embedding = [...embedding, ...padding];
+						}
+					}
+
+					// Add the processed embedding
+					embeddings.push(embedding);
 				}
 
 				// Format output based on options
