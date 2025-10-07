@@ -1,5 +1,7 @@
 {
   "triggerOnUpdates": true,
   "branches": ["master", "main"],
-  "labels": ["ready-for-review"]
+  "strictness": 2,
+  "statusCheck": false,
+  "commentTypes": ["logic", "syntax", "style"]
 }
