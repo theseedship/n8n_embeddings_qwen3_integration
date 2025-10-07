@@ -25,7 +25,7 @@ export class QwenEmbeddingTool implements INodeType {
 		credentials: [
 			{
 				name: 'ollamaApi',
-				required: false,  // Optional - not needed for self-hosted Ollama without auth
+				required: false, // Optional - not needed for self-hosted Ollama without auth
 			},
 		],
 		properties: [
@@ -443,7 +443,12 @@ export class QwenEmbeddingTool implements INodeType {
 
 					// Validate response and extract embedding
 					// Ollama returns 'embeddings' (plural) as an array
-					if (!response || !response.embeddings || !Array.isArray(response.embeddings) || response.embeddings.length === 0) {
+					if (
+						!response ||
+						!response.embeddings ||
+						!Array.isArray(response.embeddings) ||
+						response.embeddings.length === 0
+					) {
 						throw new NodeOperationError(
 							this.getNode(),
 							'Invalid response from Ollama: missing embeddings array',
