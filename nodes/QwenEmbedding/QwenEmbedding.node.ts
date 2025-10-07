@@ -19,7 +19,7 @@ class QwenEmbeddings extends Embeddings {
 		super(params);
 		this.apiUrl = params.apiUrl;
 		this.apiKey = params.apiKey;
-		this.modelName = params.modelName || 'Qwen/Qwen3-Embedding-0.6B';
+		this.modelName = params.modelName || 'qwen3-embedding:0.6b';
 		this.maxRetries = params.maxRetries || 3;
 		this.timeout = params.timeout || 30000;
 	}
@@ -39,7 +39,7 @@ class QwenEmbeddings extends Embeddings {
 		for (const text of texts) {
 			const requestBody = {
 				model: this.modelName,
-				prompt: text,  // Ollama uses 'prompt' not 'input'
+				input: text, // Ollama API expects 'input' field for embeddings
 			};
 
 			// Use a simple timeout promise wrapper for Node.js compatibility
@@ -47,7 +47,7 @@ class QwenEmbeddings extends Embeddings {
 			const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
 			try {
-				const response = await fetch(`${this.apiUrl}/api/embeddings`, {
+				const response = await fetch(`${this.apiUrl}/api/embed`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(requestBody),
@@ -142,8 +142,8 @@ export class QwenEmbedding implements INodeType {
 				displayName: 'Model Name',
 				name: 'modelName',
 				type: 'string',
-				default: 'Qwen/Qwen3-Embedding-0.6B',
-				placeholder: 'e.g., Qwen/Qwen3-Embedding-0.6B, qwen2.5:0.5b, qwen2.5:1.5b',
+				default: 'qwen3-embedding:0.6b',
+				placeholder: 'e.g., qwen3-embedding:0.6b, qwen2:0.5b, qwen2:1.5b, nomic-embed-text',
 				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
 				required: true,
 			},
@@ -234,7 +234,7 @@ export class QwenEmbedding implements INodeType {
 			const embeddings = new QwenEmbeddings({
 				apiUrl: credentials.baseUrl as string,
 				apiKey: credentials.apiKey as string | undefined,
-				modelName: modelName || 'Qwen/Qwen3-Embedding-0.6B',
+				modelName: modelName || 'qwen3-embedding:0.6b',
 				dimensions: options.dimensions || 1024,
 				instruction: options.instruction !== 'none' ? options.instruction : undefined,
 				prefix: options.prefix,
