@@ -12,6 +12,7 @@ class QwenEmbeddings extends Embeddings {
 	apiUrl: string;
 	apiKey?: string;
 	modelName: string;
+	performanceMode: string;
 	maxRetries: number;
 	timeout: number;
 
@@ -20,7 +21,8 @@ class QwenEmbeddings extends Embeddings {
 		this.apiUrl = params.apiUrl;
 		this.apiKey = params.apiKey;
 		this.modelName = params.modelName || 'qwen3-embedding:0.6b';
-		this.maxRetries = params.maxRetries || 3;
+		this.performanceMode = params.performanceMode || 'auto';
+		this.maxRetries = params.maxRetries || 2;
 		this.timeout = params.timeout || 30000;
 	}
 
@@ -42,41 +44,82 @@ class QwenEmbeddings extends Embeddings {
 				input: text, // Ollama API expects 'input' field for embeddings
 			};
 
-			// Use a simple timeout promise wrapper for Node.js compatibility
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+			let attemptCount = 0;
+			let currentTimeout = this.timeout;
+			let currentMaxRetries = this.maxRetries;
 
-			try {
-				const response = await fetch(`${this.apiUrl}/api/embed`, {
-					method: 'POST',
-					headers,
-					body: JSON.stringify(requestBody),
-					signal: controller.signal,
-				});
-				clearTimeout(timeoutId);
+			// Retry loop with auto-detection
+			while (attemptCount <= currentMaxRetries) {
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), currentTimeout);
 
-				if (!response.ok) {
-					const error = await response.text();
-					const err = new Error(`Ollama API error (${response.status}): ${error}`);
-					(err as any).statusCode = response.status;
-					throw err;
+				try {
+					const requestStart = Date.now();
+					const response = await fetch(`${this.apiUrl}/api/embed`, {
+						method: 'POST',
+						headers,
+						body: JSON.stringify(requestBody),
+						signal: controller.signal,
+					});
+					clearTimeout(timeoutId);
+
+					// Auto-detection on first successful request
+					if (this.performanceMode === 'auto' && embeddings.length === 0) {
+						const duration = Date.now() - requestStart;
+						if (duration < 1000) {
+							// Fast response - likely GPU
+							currentTimeout = 10000;
+							currentMaxRetries = 2;
+							this.timeout = currentTimeout;
+							this.maxRetries = currentMaxRetries;
+							console.log(`[Auto-detect] GPU detected (${duration}ms). Adjusted timeout to 10s.`);
+						} else if (duration > 5000) {
+							// Slow response - likely CPU
+							currentTimeout = 60000;
+							currentMaxRetries = 3;
+							this.timeout = currentTimeout;
+							this.maxRetries = currentMaxRetries;
+							console.log(`[Auto-detect] CPU detected (${duration}ms). Adjusted timeout to 60s.`);
+						}
+					}
+
+					if (!response.ok) {
+						const error = await response.text();
+						const err = new Error(`Ollama API error (${response.status}): ${error}`);
+						(err as any).statusCode = response.status;
+						throw err;
+					}
+
+					const data = (await response.json()) as { embeddings?: number[][]; embedding?: number[] };
+
+					// Ollama returns a single embedding array
+					if (data.embeddings && Array.isArray(data.embeddings)) {
+						embeddings.push(data.embeddings[0]);
+					} else if (data.embedding && Array.isArray(data.embedding)) {
+						embeddings.push(data.embedding);
+					} else {
+						const err = new Error('Invalid response from Ollama: missing embedding data');
+						(err as any).statusCode = 500;
+						throw err;
+					}
+
+					break; // Success - exit retry loop
+				} catch (error: any) {
+					clearTimeout(timeoutId);
+					attemptCount++;
+
+					// Retry logic with exponential backoff
+					if (attemptCount <= currentMaxRetries) {
+						const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
+						console.log(
+							`[Retry ${attemptCount}/${currentMaxRetries}] Request failed. Retrying in ${waitTime}ms...`,
+						);
+						await new Promise((resolve) => setTimeout(resolve, waitTime));
+					} else {
+						// Max retries reached - rethrow original error
+						throw error;
+					}
 				}
-
-				const data = (await response.json()) as { embeddings?: number[][]; embedding?: number[] };
-
-				// Ollama returns a single embedding array
-				if (data.embeddings && Array.isArray(data.embeddings)) {
-					embeddings.push(data.embeddings[0]);
-				} else if (data.embedding && Array.isArray(data.embedding)) {
-					embeddings.push(data.embedding);
-				} else {
-					const err = new Error('Invalid response from Ollama: missing embedding data');
-					(err as any).statusCode = 500;
-					throw err;
-				}
-			} catch (error) {
-				clearTimeout(timeoutId);
-				throw error;
 			}
 		}
 
@@ -100,6 +143,8 @@ interface QwenEmbeddingsParams extends EmbeddingsParams {
 	dimensions?: number;
 	instruction?: string;
 	prefix?: string;
+	performanceMode?: string;
+	customTimeout?: number;
 	maxRetries?: number;
 	timeout?: number;
 }
@@ -163,6 +208,24 @@ export class QwenEmbedding implements INodeType {
 						description: 'Optional prefix to prepend to the text for better semantic understanding',
 					},
 					{
+						displayName: 'Custom Timeout (Ms)',
+						name: 'customTimeout',
+						type: 'number',
+						default: 30000,
+						description: 'Request timeout in milliseconds',
+						typeOptions: {
+							minValue: 1000,
+							maxValue: 300000,
+							numberStepSize: 1000,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
+						hint: 'GPU: 5-10s, CPU: 30-60s recommended',
+					},
+					{
 						displayName: 'Dimensions',
 						name: 'dimensions',
 						type: 'number',
@@ -203,15 +266,47 @@ export class QwenEmbedding implements INodeType {
 						displayName: 'Max Retries',
 						name: 'maxRetries',
 						type: 'number',
-						default: 3,
-						description: 'Maximum number of retries for API calls',
+						default: 2,
+						description: 'Maximum number of retry attempts on failure',
+						typeOptions: {
+							minValue: 0,
+							maxValue: 5,
+							numberStepSize: 1,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
 					},
 					{
-						displayName: 'Timeout',
-						name: 'timeout',
-						type: 'number',
-						default: 30000,
-						description: 'Timeout for API calls in milliseconds',
+						displayName: 'Performance Mode',
+						name: 'performanceMode',
+						type: 'options',
+						default: 'auto',
+						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
+						options: [
+							{
+								name: 'Auto-Detect',
+								value: 'auto',
+								description: 'Automatically detect GPU/CPU on first request (recommended)',
+							},
+							{
+								name: 'GPU Optimized',
+								value: 'gpu',
+								description: 'Fast inference with GPU: 10s timeout, 2 retries',
+							},
+							{
+								name: 'CPU Optimized',
+								value: 'cpu',
+								description: 'Slower CPU inference: 60s timeout, 3 retries',
+							},
+							{
+								name: 'Custom',
+								value: 'custom',
+								description: 'Manually specify timeout and retry settings',
+							},
+						],
 					},
 				],
 			},
@@ -227,9 +322,35 @@ export class QwenEmbedding implements INodeType {
 				prefix?: string;
 				dimensions?: number;
 				instruction?: string;
+				performanceMode?: string;
+				customTimeout?: number;
 				maxRetries?: number;
-				timeout?: number;
 			};
+
+			// Calculate timeout and retries based on performance mode
+			const performanceMode = options.performanceMode || 'auto';
+			let requestTimeout: number;
+			let maxRetries: number;
+
+			switch (performanceMode) {
+				case 'gpu':
+					requestTimeout = 10000; // 10 seconds for GPU
+					maxRetries = 2;
+					break;
+				case 'cpu':
+					requestTimeout = 60000; // 60 seconds for CPU
+					maxRetries = 3;
+					break;
+				case 'custom':
+					requestTimeout = options.customTimeout || 30000;
+					maxRetries = options.maxRetries || 2;
+					break;
+				case 'auto':
+				default:
+					requestTimeout = 30000; // 30 seconds default
+					maxRetries = 2;
+					break;
+			}
 
 			const embeddings = new QwenEmbeddings({
 				apiUrl: credentials.baseUrl as string,
@@ -238,8 +359,10 @@ export class QwenEmbedding implements INodeType {
 				dimensions: options.dimensions || 1024,
 				instruction: options.instruction !== 'none' ? options.instruction : undefined,
 				prefix: options.prefix,
-				maxRetries: options.maxRetries || 3,
-				timeout: options.timeout || 30000,
+				performanceMode: performanceMode,
+				customTimeout: options.customTimeout,
+				maxRetries: maxRetries,
+				timeout: requestTimeout,
 			});
 
 			return {

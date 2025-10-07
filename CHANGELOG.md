@@ -32,10 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
-- **QwenEmbeddingTool Node**: All performance enhancements applied
+- **Both QwenEmbeddingTool and QwenEmbedding Nodes**: All performance enhancements applied
   - Better error messages with retry count context
   - Console logging for auto-detection events
   - Hardware-aware default configurations
+  - Unified performance mode interface across both nodes
 
 ### Technical Details
 
