@@ -18,12 +18,33 @@ class QwenEmbeddings extends Embeddings {
 
 	constructor(params: QwenEmbeddingsParams) {
 		super(params);
-		this.apiUrl = params.apiUrl;
+		this.apiUrl = this.validateUrl(params.apiUrl);
 		this.apiKey = params.apiKey;
 		this.modelName = params.modelName || 'qwen3-embedding:0.6b';
 		this.performanceMode = params.performanceMode || 'auto';
 		this.maxRetries = params.maxRetries || 2;
 		this.timeout = params.timeout || 30000;
+	}
+
+	private validateUrl(url: string): string {
+		try {
+			const parsed = new URL(url);
+			if (!['http:', 'https:'].includes(parsed.protocol)) {
+				// eslint-disable-next-line n8n-nodes-base/node-execute-block-wrong-error-thrown
+				throw new Error('Only HTTP and HTTPS protocols are allowed');
+			}
+			return url;
+		} catch (error) {
+			// eslint-disable-next-line n8n-nodes-base/node-execute-block-wrong-error-thrown
+			throw new Error(
+				`Invalid API URL: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			);
+		}
+	}
+
+	private sanitizeText(text: string): string {
+		// Remove control characters that could cause issues
+		return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 	}
 
 	private async callOllamaEmbedAPI(texts: string[]): Promise<number[][]> {
@@ -41,7 +62,7 @@ class QwenEmbeddings extends Embeddings {
 		for (const text of texts) {
 			const requestBody = {
 				model: this.modelName,
-				input: text, // Ollama API expects 'input' field for embeddings
+				input: this.sanitizeText(text), // Sanitize input before sending to API
 			};
 
 			let attemptCount = 0;
@@ -72,14 +93,14 @@ class QwenEmbeddings extends Embeddings {
 							currentMaxRetries = 2;
 							this.timeout = currentTimeout;
 							this.maxRetries = currentMaxRetries;
-							console.log(`[Auto-detect] GPU detected (${duration}ms). Adjusted timeout to 10s.`);
+							// Auto-detection: GPU mode activated (timeout: 10s)
 						} else if (duration > 5000) {
 							// Slow response - likely CPU
 							currentTimeout = 60000;
 							currentMaxRetries = 3;
 							this.timeout = currentTimeout;
 							this.maxRetries = currentMaxRetries;
-							console.log(`[Auto-detect] CPU detected (${duration}ms). Adjusted timeout to 60s.`);
+							// Auto-detection: CPU mode activated (timeout: 60s)
 						}
 					}
 
@@ -111,9 +132,7 @@ class QwenEmbeddings extends Embeddings {
 					// Retry logic with exponential backoff
 					if (attemptCount <= currentMaxRetries) {
 						const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
-						console.log(
-							`[Retry ${attemptCount}/${currentMaxRetries}] Request failed. Retrying in ${waitTime}ms...`,
-						);
+						// Retrying request with exponential backoff
 						await new Promise((resolve) => setTimeout(resolve, waitTime));
 					} else {
 						// Max retries reached - rethrow original error

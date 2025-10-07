@@ -7,6 +7,26 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
+// Security helper functions
+function validateUrl(url: string): string {
+	try {
+		const parsed = new URL(url);
+		if (!['http:', 'https:'].includes(parsed.protocol)) {
+			// eslint-disable-next-line n8n-nodes-base/node-execute-block-wrong-error-thrown
+			throw new Error('Only HTTP and HTTPS protocols are allowed');
+		}
+		return url;
+	} catch (error) {
+		// eslint-disable-next-line n8n-nodes-base/node-execute-block-wrong-error-thrown
+		throw new Error(`Invalid API URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	}
+}
+
+function sanitizeText(text: string): string {
+	// Remove control characters that could cause issues
+	return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+}
+
 export class QwenEmbeddingTool implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Qwen Embedding Tool',
@@ -247,7 +267,7 @@ export class QwenEmbeddingTool implements INodeType {
 		const returnData: INodeExecutionData[] = [];
 
 		const credentials = await this.getCredentials('ollamaApi');
-		const apiUrl = credentials.baseUrl as string;
+		const apiUrl = validateUrl(credentials.baseUrl as string);
 		const modelName =
 			(this.getNodeParameter('modelName', 0) as string) || 'Qwen/Qwen3-Embedding-0.6B';
 
@@ -357,7 +377,7 @@ export class QwenEmbeddingTool implements INodeType {
 					// Prepare request body for Ollama
 					const requestBody = {
 						model: modelName,
-						input: text, // Ollama API expects 'input' field for embeddings
+						input: sanitizeText(text), // Sanitize input before sending to API
 					};
 
 					// Make HTTP request to Ollama embedding API
@@ -389,17 +409,13 @@ export class QwenEmbeddingTool implements INodeType {
 									requestTimeout = 10000;
 									maxRetries = 2;
 									requestOptions.timeout = requestTimeout;
-									console.log(
-										`[Auto-detect] GPU detected (${duration}ms). Adjusted timeout to 10s.`,
-									);
+									// Auto-detection: GPU mode activated (timeout: 10s)
 								} else if (duration > 5000) {
 									// Slow response - likely CPU
 									requestTimeout = 60000;
 									maxRetries = 3;
 									requestOptions.timeout = requestTimeout;
-									console.log(
-										`[Auto-detect] CPU detected (${duration}ms). Adjusted timeout to 60s.`,
-									);
+									// Auto-detection: CPU mode activated (timeout: 60s)
 								}
 							}
 
@@ -426,9 +442,7 @@ export class QwenEmbeddingTool implements INodeType {
 							// Retry logic with exponential backoff
 							if (attemptCount <= maxRetries) {
 								const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
-								console.log(
-									`[Retry ${attemptCount}/${maxRetries}] Request failed. Retrying in ${waitTime}ms...`,
-								);
+								// Retrying request with exponential backoff
 								await new Promise((resolve) => setTimeout(resolve, waitTime));
 							} else {
 								// Max retries reached
