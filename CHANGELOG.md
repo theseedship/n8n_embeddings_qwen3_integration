@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2025-10-07
+
+### Added
+
+- **Performance Mode with Auto-Detection**: Smart timeout and retry configuration
+  - `Auto-Detect`: Automatically detects GPU/CPU on first request and adjusts timeout
+    - GPU detected (<1s response): 10s timeout, 2 retries
+    - CPU detected (>5s response): 60s timeout, 3 retries
+  - `GPU Optimized`: Manual setting for GPU hardware (10s timeout, 2 retries)
+  - `CPU Optimized`: Manual setting for CPU hardware (60s timeout, 3 retries)
+  - `Custom`: User-defined timeout and retry settings
+  - Impact: Eliminates timeout errors on CPU while maintaining fast GPU performance
+
+- **Retry Logic with Exponential Backoff**: Automatic retry on transient failures
+  - Exponential backoff: 1s → 2s → 4s → 5s (capped)
+  - Configurable max retries (0-5, default 2)
+  - Clear console logging for debugging
+  - Impact: Handles network issues and temporary Ollama unavailability gracefully
+
+- **Dynamic Timeout Adjustment**: Timeout auto-adjusts based on detected hardware
+  - First request measures actual performance
+  - Subsequent requests use optimized timeout
+  - Prevents unnecessary waiting on fast hardware
+  - Prevents premature timeouts on slow hardware
+
+### Improved
+
+- **QwenEmbeddingTool Node**: All performance enhancements applied
+  - Better error messages with retry count context
+  - Console logging for auto-detection events
+  - Hardware-aware default configurations
+
+### Technical Details
+
+**Auto-Detection Algorithm:**
+```
+1. First request measures duration
+2. If duration < 1s → GPU detected → timeout = 10s
+3. If duration > 5s → CPU detected → timeout = 60s
+4. If 1s ≤ duration ≤ 5s → keep default 30s
+5. Apply new settings to subsequent requests
+```
+
+**Retry Backoff Strategy:**
+```
+Attempt 1: Wait 1s  (2^0 × 1000ms)
+Attempt 2: Wait 2s  (2^1 × 1000ms)
+Attempt 3: Wait 4s  (2^2 × 1000ms)
+Attempt 4+: Wait 5s (capped at 5000ms)
+```
+
 ## [0.3.4] - 2025-10-07
 
 ### Fixed (CRITICAL - P0 Blocker Bugs)

@@ -106,6 +106,24 @@ export class QwenEmbeddingTool implements INodeType {
 						description: 'Optional prefix to prepend to the text for better semantic understanding',
 					},
 					{
+						displayName: 'Custom Timeout (Ms)',
+						name: 'customTimeout',
+						type: 'number',
+						default: 30000,
+						description: 'Request timeout in milliseconds',
+						typeOptions: {
+							minValue: 1000,
+							maxValue: 300000,
+							numberStepSize: 1000,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
+						hint: 'GPU: 5-10s, CPU: 30-60s recommended',
+					},
+					{
 						displayName: 'Dimensions',
 						name: 'dimensions',
 						type: 'number',
@@ -146,6 +164,52 @@ export class QwenEmbeddingTool implements INodeType {
 								name: 'Document',
 								value: 'document',
 								description: 'For documents being indexed',
+							},
+						],
+					},
+					{
+						displayName: 'Max Retries',
+						name: 'maxRetries',
+						type: 'number',
+						default: 2,
+						description: 'Maximum number of retry attempts on failure',
+						typeOptions: {
+							minValue: 0,
+							maxValue: 5,
+							numberStepSize: 1,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
+					},
+					{
+						displayName: 'Performance Mode',
+						name: 'performanceMode',
+						type: 'options',
+						default: 'auto',
+						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
+						options: [
+							{
+								name: 'Auto-Detect',
+								value: 'auto',
+								description: 'Automatically detect GPU/CPU on first request (recommended)',
+							},
+							{
+								name: 'GPU Optimized',
+								value: 'gpu',
+								description: 'Fast inference with GPU: 10s timeout, 2 retries',
+							},
+							{
+								name: 'CPU Optimized',
+								value: 'cpu',
+								description: 'Slower CPU inference: 60s timeout, 3 retries',
+							},
+							{
+								name: 'Custom',
+								value: 'custom',
+								description: 'Manually specify timeout and retry settings',
 							},
 						],
 					},
@@ -197,7 +261,35 @@ export class QwenEmbeddingTool implements INodeType {
 					instruction?: string;
 					includeMetadata?: boolean;
 					returnFormat?: string;
+					performanceMode?: string;
+					customTimeout?: number;
+					maxRetries?: number;
 				};
+
+				// Calculate timeout and retries based on performance mode
+				const performanceMode = options.performanceMode || 'auto';
+				let requestTimeout: number;
+				let maxRetries: number;
+
+				switch (performanceMode) {
+					case 'gpu':
+						requestTimeout = 10000; // 10 seconds for GPU
+						maxRetries = 2;
+						break;
+					case 'cpu':
+						requestTimeout = 60000; // 60 seconds for CPU
+						maxRetries = 3;
+						break;
+					case 'custom':
+						requestTimeout = options.customTimeout || 30000;
+						maxRetries = options.maxRetries || 2;
+						break;
+					case 'auto':
+					default:
+						requestTimeout = 30000; // 30 seconds default
+						maxRetries = 2;
+						break;
+				}
 
 				let texts: string[] = [];
 
@@ -265,7 +357,7 @@ export class QwenEmbeddingTool implements INodeType {
 					// Prepare request body for Ollama
 					const requestBody = {
 						model: modelName,
-						input: text,  // Ollama API expects 'input' field for embeddings
+						input: text, // Ollama API expects 'input' field for embeddings
 					};
 
 					// Make HTTP request to Ollama embedding API
@@ -275,33 +367,80 @@ export class QwenEmbeddingTool implements INodeType {
 						body: requestBody,
 						json: true,
 						returnFullResponse: false,
-						timeout: 30000, // 30 second timeout
+						timeout: requestTimeout,
 					};
 
 					let response: any;
-					try {
-						response = await this.helpers.httpRequestWithAuthentication.call(
-							this,
-							'ollamaApi',
-							requestOptions,
-						);
-					} catch (error: any) {
-						// Handle specific error cases
-						if (error.message?.includes('ECONNREFUSED')) {
-							throw new NodeOperationError(
-								this.getNode(),
-								`Cannot connect to Ollama at ${apiUrl}. Please ensure Ollama is running.`,
-								{ itemIndex },
+					let attemptCount = 0;
+
+					// Retry loop with auto-detection
+					while (attemptCount <= maxRetries) {
+						try {
+							const requestStart = Date.now();
+							response = await this.helpers.httpRequestWithAuthentication.call(
+								this,
+								'ollamaApi',
+								requestOptions,
 							);
+
+							// Auto-detection on first successful request
+							if (performanceMode === 'auto' && embeddings.length === 0) {
+								const duration = Date.now() - requestStart;
+								if (duration < 1000) {
+									// Fast response - likely GPU
+									requestTimeout = 10000;
+									maxRetries = 2;
+									requestOptions.timeout = requestTimeout;
+									console.log(
+										`[Auto-detect] GPU detected (${duration}ms). Adjusted timeout to 10s.`,
+									);
+								} else if (duration > 5000) {
+									// Slow response - likely CPU
+									requestTimeout = 60000;
+									maxRetries = 3;
+									requestOptions.timeout = requestTimeout;
+									console.log(
+										`[Auto-detect] CPU detected (${duration}ms). Adjusted timeout to 60s.`,
+									);
+								}
+							}
+
+							break; // Success - exit retry loop
+						} catch (error: any) {
+							attemptCount++;
+
+							// Handle specific error cases
+							if (error.message?.includes('ECONNREFUSED')) {
+								throw new NodeOperationError(
+									this.getNode(),
+									`Cannot connect to Ollama at ${apiUrl}. Please ensure Ollama is running.`,
+									{ itemIndex },
+								);
+							}
+							if (error.statusCode === 404) {
+								throw new NodeOperationError(
+									this.getNode(),
+									`Model ${modelName} not found. Please pull it first with: ollama pull ${modelName}`,
+									{ itemIndex },
+								);
+							}
+
+							// Retry logic with exponential backoff
+							if (attemptCount <= maxRetries) {
+								const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
+								console.log(
+									`[Retry ${attemptCount}/${maxRetries}] Request failed. Retrying in ${waitTime}ms...`,
+								);
+								await new Promise((resolve) => setTimeout(resolve, waitTime));
+							} else {
+								// Max retries reached
+								throw new NodeOperationError(
+									this.getNode(),
+									`Failed after ${maxRetries} retries: ${error.message}`,
+									{ itemIndex },
+								);
+							}
 						}
-						if (error.statusCode === 404) {
-							throw new NodeOperationError(
-								this.getNode(),
-								`Model ${modelName} not found. Please pull it first with: ollama pull ${modelName}`,
-								{ itemIndex },
-							);
-						}
-						throw error;
 					}
 
 					// Validate response and extract embedding
