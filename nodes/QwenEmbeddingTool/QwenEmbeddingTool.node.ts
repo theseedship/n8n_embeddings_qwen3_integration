@@ -25,7 +25,7 @@ export class QwenEmbeddingTool implements INodeType {
 		credentials: [
 			{
 				name: 'ollamaApi',
-				required: true,
+				required: false,  // Optional - not needed for self-hosted Ollama without auth
 			},
 		],
 		properties: [
@@ -377,11 +377,9 @@ export class QwenEmbeddingTool implements INodeType {
 					while (attemptCount <= maxRetries) {
 						try {
 							const requestStart = Date.now();
-							response = await this.helpers.httpRequestWithAuthentication.call(
-								this,
-								'ollamaApi',
-								requestOptions,
-							);
+							// Use simple httpRequest instead of httpRequestWithAuthentication
+							// to avoid authentication system transforming POST to GET
+							response = await this.helpers.httpRequest(requestOptions);
 
 							// Auto-detection on first successful request
 							if (performanceMode === 'auto' && embeddings.length === 0) {
@@ -444,16 +442,17 @@ export class QwenEmbeddingTool implements INodeType {
 					}
 
 					// Validate response and extract embedding
-					if (!response || !response.embedding) {
+					// Ollama returns 'embeddings' (plural) as an array
+					if (!response || !response.embeddings || !Array.isArray(response.embeddings) || response.embeddings.length === 0) {
 						throw new NodeOperationError(
 							this.getNode(),
-							'Invalid response from Ollama: missing embedding',
+							'Invalid response from Ollama: missing embeddings array',
 							{ itemIndex },
 						);
 					}
 
 					// Apply dimension adjustment if specified
-					let embedding = response.embedding;
+					let embedding = response.embeddings[0];
 					if (options.dimensions && options.dimensions > 0) {
 						const targetDim = options.dimensions;
 						const currentDim = embedding.length;

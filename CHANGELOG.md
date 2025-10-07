@@ -5,49 +5,108 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2025-10-07
+## [0.4.2] - 2025-10-07
 
-### Fixed - ROLLBACK TO WORKING VERSION
+### Fixed - COMPLETE HTTP 405 RESOLUTION ✅
 
-**CRITICAL: Reverted to version 0.3.6 codebase that works on Railway production**
+**THE SOLUTION THAT ACTUALLY WORKS**
 
-- **HTTP 405 Fix**: Restored `httpRequestWithAuthentication` approach from v0.3.6
-  - Root cause: N8N's native `fetch()` and `httpRequest` have caching/transformation issues
-  - Solution: Use N8N's `httpRequestWithAuthentication` helper (tested on Railway)
-  - Working code pattern from Railway production environment
+- **Response Field Fix**: Changed from `response.embedding` to `response.embeddings[0]`
+  - Ollama API returns `embeddings` (plural) as an array, not singular
+  - This was the final piece after v0.4.1 fixed the POST method
+  - Impact: Node now works correctly end-to-end
 
 **Technical Changes:**
 ```typescript
-// Working approach (v0.3.6 from Railway):
-const requestOptions: IHttpRequestOptions = {
-    method: 'POST',
-    url: `${apiUrl}/api/embed`,
-    body: requestBody,  // Direct object
-    json: true,
-    returnFullResponse: false,
-    timeout: requestTimeout,
-};
-response = await this.helpers.httpRequestWithAuthentication.call(
-    this,
-    'ollamaApi',
-    requestOptions,
-);
+// Lines 446-455 in QwenEmbeddingTool.node.ts
+// BEFORE:
+if (!response || !response.embedding) {
+    throw new NodeOperationError(...);
+}
+let embedding = response.embedding;
+
+// AFTER:
+if (!response || !response.embeddings || !Array.isArray(response.embeddings) ||
+    response.embeddings.length === 0) {
+    throw new NodeOperationError(
+        this.getNode(),
+        'Invalid response from Ollama: missing embeddings array',
+        { itemIndex },
+    );
+}
+let embedding = response.embeddings[0];  // Access array element
 ```
 
-**Why This Version:**
-- ✅ Proven to work on Railway production (CPU mode)
-- ✅ Uses N8N's proper authentication helpers
-- ✅ No POST→GET transformation issues
-- ✅ Compatible with N8N 1.113.3
-- ✅ Works with dimension truncation (128 dimensions tested)
+**Evidence of Success:**
+```
+Ollama logs:
+[GIN] 2025/10/07 - 19:44:23 | 200 | 268.613321ms | POST "/api/embed" ✅
+[GIN] 2025/10/07 - 19:44:46 | 200 | 215.767418ms | POST "/api/embed" ✅
+
+Average GPU performance: ~218ms per embedding
+```
+
+**Documentation:**
+- Added comprehensive [HTTP 405 Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md)
+- Updated README.md with all option descriptions
+- Verified all options are fully implemented
+
+## [0.4.1] - 2025-10-07
+
+### Fixed - HTTP 405 POST Method Restored 🎯
+
+**BREAKTHROUGH: Fixed POST→GET Transformation**
+
+- **Credentials Made Optional**: Changed `required: true` to `required: false` (line 28)
+  - Self-hosted Ollama doesn't need authentication
+  - Required credentials caused N8N to transform POST→GET when missing
+  - Still supports authenticated instances if credentials provided
+
+- **Switched to Simple httpRequest**: Replaced `httpRequestWithAuthentication` with `httpRequest` (line 382)
+  - Bypasses N8N's authentication system that was transforming requests
+  - Direct POST method without middleware interference
+  - Simpler, more predictable behavior
+
+**Technical Changes:**
+```typescript
+// Line 28: Make credentials optional
+credentials: [
+    {
+        name: 'ollamaApi',
+        required: false,  // ✅ Was: true (caused POST→GET)
+    },
+],
+
+// Line 382: Use simple httpRequest
+// ✅ Changed from: httpRequestWithAuthentication
+response = await this.helpers.httpRequest(requestOptions);
+```
+
+**Result:** POST requests now work, but response parsing needed fix (see v0.4.2).
 
 **Evidence:**
-- Railway logs showed consistent 200 OK responses with v0.3.6
-- Local v0.3.9 with fetch() showed persistent 405 GET errors
-- Direct fetch() test from container worked, proving N8N has internal issues
+```
+Ollama logs changed from:
+[GIN] | 405 | GET  "/api/embed"  ❌
+To:
+[GIN] | 200 | POST "/api/embed"  ✅
+```
 
-**Rollback Decision:**
-Instead of fighting N8N's internal caching/transformation mechanisms, we reverted to the proven working implementation from Railway production.
+## [0.4.0] - 2025-10-07
+
+### Attempted Fix - Rollback to Railway Code ❌
+
+**FAILED: Railway code didn't work locally**
+
+- Reverted to v0.3.6 codebase that worked on Railway production
+- Used `httpRequestWithAuthentication` approach
+- Result: Still HTTP 405 errors locally
+
+**Root Cause Discovery:**
+- Railway environment had Ollama credentials configured in N8N
+- Local environment didn't have credentials
+- `httpRequestWithAuthentication` with `required: true` transformed POST→GET when credentials missing
+- This version led to understanding the credential requirement issue (fixed in v0.4.1)
 
 ## [0.3.9] - 2025-10-07
 

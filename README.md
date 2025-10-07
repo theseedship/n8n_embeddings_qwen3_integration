@@ -38,12 +38,14 @@ You need to have Ollama installed and running with a Qwen model:
 
 1. **Install Ollama**: Visit [https://ollama.com](https://ollama.com) for installation instructions
 
-2. **Pull a Qwen model**:
+2. **Pull a Qwen embedding model**:
 ```bash
-# Choose one of these models based on your needs:
-ollama pull qwen2.5:0.5b  # Smallest, fastest
-ollama pull qwen2.5:1.5b  # Balanced
-ollama pull qwen2.5:7b    # Best quality
+# Qwen3-Embedding models (specialized for embeddings):
+ollama pull qwen3-embedding:0.6b  # Recommended - 1024 dimensions
+ollama pull qwen3-embedding:latest
+
+# Note: Use qwen3-embedding models for best embedding quality
+# Generic qwen2.5 models can also generate embeddings but are optimized for chat
 ```
 
 3. **Verify Ollama is running**:
@@ -55,14 +57,18 @@ Ollama will be available at `http://localhost:11434` by default
 
 ## 🔧 Setup
 
-### 1. Configure Credentials
+### 1. Configure Credentials (Optional)
+
+**For self-hosted Ollama without authentication:** You can skip credential configuration. The node will connect directly to your Ollama instance.
+
+**For authenticated Ollama instances:**
 
 1. In n8n, go to **Credentials** > **New**
 2. Select **Qwen Embedding API (Ollama)**
 3. Enter:
    - **Ollama URL**: `http://localhost:11434` (or your Ollama URL)
-   - **Model Name**: `qwen2.5:0.5b` (or your chosen model)
-   - **API Key**: (optional, only if your Ollama requires authentication)
+   - **Model Name**: `qwen3-embedding:0.6b` (or your chosen model)
+   - **API Key**: Your authentication token (if required)
 4. Click **Test Connection** to verify
 
 ### 2. Using the Nodes
@@ -98,21 +104,146 @@ Use in any workflow for direct embedding generation:
 
 ## ⚙️ Configuration Options
 
-### Common Options
+### Performance Mode
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| **Dimensions** | Embedding vector size (32-1024) | 1024 |
-| **Instruction Type** | Query/Document/None for optimized embeddings | None |
-| **Context Prefix** | Prefix to add context to text | - |
+Controls timeout and retry behavior based on your hardware:
 
-### Tool-Specific Options
+- **Auto-Detect** (default): Automatically detects GPU/CPU on first request
+  - GPU detected (<1s response): 10s timeout, 2 retries
+  - CPU detected (>5s response): 60s timeout, 3 retries
+  - Works great for dynamic environments
 
-| Option | Description | Available In |
-|--------|-------------|--------------|
-| **Operation** | Single or batch embedding | Tool only |
-| **Return Format** | Full/Simplified/Embedding only | Tool only |
-| **Include Metadata** | Add processing metadata | Tool only |
+- **GPU Optimized**: Manual setting for GPU hardware
+  - 10 second timeout
+  - 2 retry attempts
+  - Best for NVIDIA GPU setups
+
+- **CPU Optimized**: Manual setting for CPU hardware
+  - 60 second timeout
+  - 3 retry attempts
+  - Prevents timeout errors on CPU-only systems
+
+- **Custom**: User-defined timeout and retry settings
+  - Set your own timeout (in milliseconds)
+  - Configure max retry attempts (0-5)
+
+**How Auto-Detection Works:**
+```
+First request measures actual response time:
+- Response < 1s → GPU detected → timeout = 10s
+- Response > 5s → CPU detected → timeout = 60s
+- 1s ≤ response ≤ 5s → keep default 30s
+```
+
+### Dimensions
+
+Adjust embedding vector size (32-1024 dimensions):
+
+- **Default**: 1024 (full model dimensions)
+- **Recommended ranges**:
+  - 128-256: Smaller databases, faster similarity search
+  - 512: Balanced performance/quality
+  - 1024: Maximum quality (default)
+
+**Implementation:** Uses Matryoshka Representation Learning (MRL) - dimensions are truncated or padded to match your target size without retraining the model.
+
+### Instruction Type
+
+Optimize embeddings for specific use cases:
+
+- **None** (default): Standard embeddings without special instructions
+- **Query**: Optimized for search queries
+  - Prefix: `"Instruct: Retrieve semantically similar text.\nQuery: "`
+  - Use for: User questions, search inputs
+- **Document**: Optimized for document storage
+  - Prefix: `"Instruct: Represent this document for retrieval.\nDocument: "`
+  - Use for: Indexing documents, knowledge base entries
+
+**Performance Impact:** 1-5% better semantic matching when query/document types match their use case.
+
+### Context Prefix
+
+Add custom context to all texts before embedding:
+
+**Example:**
+```
+Context Prefix: "Medical context:"
+Input text: "patient symptoms include fever"
+Embedded as: "Medical context: patient symptoms include fever"
+```
+
+**Use Cases:**
+- Domain-specific context (legal, medical, technical)
+- Language hints
+- Task-specific framing
+
+### Return Format (Tool Only)
+
+Controls output structure:
+
+- **Full** (default):
+  ```json
+  {
+    "embedding": [0.123, 0.456, ...],
+    "dimensions": 1024,
+    "text": "original text",
+    "model": "qwen3-embedding:0.6b",
+    "metadata": { ... }  // if includeMetadata enabled
+  }
+  ```
+
+- **Simplified**:
+  ```json
+  {
+    "text": "original text",
+    "vector": [0.123, 0.456, ...],
+    "dimensions": 1024
+  }
+  ```
+
+- **Embedding Only**:
+  ```json
+  {
+    "embedding": [0.123, 0.456, ...]
+  }
+  ```
+
+### Include Metadata (Tool Only)
+
+When enabled, adds processing metadata to output:
+
+```json
+{
+  "metadata": {
+    "prefix": "Medical context:",      // Context prefix used
+    "instruction": "query",            // Instruction type applied
+    "timestamp": "2025-10-07T19:44:23Z",  // Processing time
+    "batchSize": 5                     // Number of texts (batch mode only)
+  }
+}
+```
+
+**Use Cases:**
+- Debugging embedding configurations
+- Tracking when embeddings were generated
+- Auditing processing parameters
+
+### Custom Timeout & Max Retries (Custom Mode Only)
+
+Fine-tune request behavior:
+
+- **Custom Timeout**: Milliseconds to wait before timeout (default: 30000)
+- **Max Retries**: Number of retry attempts on failure (0-5, default: 2)
+
+**Retry Logic:**
+- Exponential backoff: 1s → 2s → 4s → 5s (capped)
+- Clear console logging for debugging
+- Automatic retry on transient failures
+
+### Operation (Tool Only)
+
+- **Generate Embedding**: Single text embedding
+- **Generate Batch Embeddings**: Multiple texts in one request
 
 ## 📝 Examples
 
@@ -158,17 +289,29 @@ Use in any workflow for direct embedding generation:
 
 ### Model Information
 
-- **Models**: Qwen2.5 series (0.5B, 1.5B, 3B, 7B, 14B, 32B, 72B)
-- **Context Length**: Varies by model
-- **Languages**: 29+ languages supported
-- **Dimensions**: Varies by model (typically 896-1536)
-- **Provider**: Ollama (local inference)
+- **Recommended Model**: `qwen3-embedding:0.6b`
+  - 1024 native dimensions
+  - MRL support (Matryoshka Representation Learning)
+  - Adjustable dimensions: 32-1024
+  - Multilingual support (100+ languages)
+- **Alternative Models**: Any Ollama-compatible embedding model
+- **Provider**: Ollama (local inference, no external API calls)
 
-### Performance
+### Performance Characteristics
 
+- **GPU Mode**: ~200-270ms per embedding (NVIDIA GPU)
+- **CPU Mode**: 5-10 seconds per embedding
+- **Auto-Detection**: Automatically adjusts timeouts based on hardware
 - **Query Optimization**: 1-5% performance boost with instruction type
-- **Batch Size**: Recommended 32 texts per batch
-- **Timeout**: Default 30 seconds (configurable)
+- **Batch Processing**: Processes texts sequentially (Ollama API limitation)
+- **Timeout**: Adaptive (10s GPU, 60s CPU, or 30s default)
+
+### API Compatibility
+
+- **Ollama API**: `/api/embed` endpoint (POST method)
+- **Request Format**: `{model: string, input: string}`
+- **Response Format**: `{embeddings: number[][]}`
+- **Authentication**: Optional (credentials not required for self-hosted)
 
 ## 🤝 Contributing
 
@@ -190,12 +333,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [n8n Community](https://community.n8n.io/) for support and feedback
 - [LangChain](https://github.com/langchain-ai/langchainjs) for the embedding interface
 
+## 🐛 Troubleshooting
+
+### HTTP 405 "Method Not Allowed" Errors
+
+If you encounter HTTP 405 errors, see the comprehensive [HTTP 405 Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md) which covers:
+- Root cause analysis
+- N8N authentication system issues
+- Working patterns vs anti-patterns
+- Step-by-step verification
+
+### Model Not Found Errors
+
+```bash
+# Pull the correct model first:
+ollama pull qwen3-embedding:0.6b
+
+# Verify it's available:
+ollama list
+```
+
+### Performance Issues
+
+- **CPU mode timing out:** Use Performance Mode "CPU Optimized" or "Auto-Detect"
+- **GPU not detected:** Ensure NVIDIA drivers and Docker GPU runtime are configured
+- **Slow responses:** Check Ollama is running with `ollama list`
+
 ## 🔗 Links
 
 - [NPM Package](https://www.npmjs.com/package/n8n-nodes-qwen-embedding)
 - [GitHub Repository](https://github.com/theseedship/deposium_n8n_embeddings_integration)
+- [Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md)
 - [n8n Community Nodes](https://n8n.io/integrations)
 - [Qwen3-Embedding Paper](https://arxiv.org/abs/2411.00156)
+- [Ollama Documentation](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings)
 
 ## 📮 Support
 
