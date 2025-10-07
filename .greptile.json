@@ -1,0 +1,5 @@
+{
+  "triggerOnUpdates": true,
+  "branches": ["master", "main"],
+  "labels": ["ready-for-review"]
+}
