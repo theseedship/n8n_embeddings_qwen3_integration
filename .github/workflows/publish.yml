@@ -128,10 +128,29 @@ jobs:
           echo "✅ Using manually set version: ${{ steps.check_version.outputs.current_version }}"
           echo "Skipping auto-bump - package.json already updated"
 
+      - name: Check if version exists on NPM
+        id: check_npm
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view n8n-nodes-qwen-embedding@$VERSION version 2>/dev/null; then
+            echo "version_exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Version $VERSION already exists on NPM, skipping publish"
+          else
+            echo "version_exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Version $VERSION is new, will publish"
+          fi
+
       - name: Publish to NPM
+        if: steps.check_npm.outputs.version_exists == 'false'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Skip publish (version exists)
+        if: steps.check_npm.outputs.version_exists == 'true'
+        run: |
+          echo "ℹ️  Skipping publish - version already exists on NPM"
+          echo "This is expected for non-code commits (docs, config, etc.)"
 
       # Skip git tag creation - version is managed locally
       # The npm publish already happened successfully
