@@ -33,8 +33,8 @@ export class QwenEmbeddingTool implements INodeType {
 				displayName: 'Model Name',
 				name: 'modelName',
 				type: 'string',
-				default: 'Qwen/Qwen3-Embedding-0.6B',
-				placeholder: 'e.g., Qwen/Qwen3-Embedding-0.6B, qwen2.5:0.5b, qwen2.5:1.5b',
+				default: 'qwen3-embedding:0.6b',
+				placeholder: 'e.g., qwen3-embedding:0.6b, qwen2:0.5b, qwen2:1.5b, nomic-embed-text',
 				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
 				required: true,
 			},
@@ -265,13 +265,13 @@ export class QwenEmbeddingTool implements INodeType {
 					// Prepare request body for Ollama
 					const requestBody = {
 						model: modelName,
-						prompt: text,  // Ollama uses 'prompt' not 'input'
+						input: text,  // Ollama API expects 'input' field for embeddings
 					};
 
 					// Make HTTP request to Ollama embedding API
 					const requestOptions: IHttpRequestOptions = {
 						method: 'POST',
-						url: `${apiUrl}/api/embeddings`,
+						url: `${apiUrl}/api/embed`,
 						body: requestBody,
 						json: true,
 						returnFullResponse: false,
