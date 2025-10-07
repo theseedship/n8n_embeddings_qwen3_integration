@@ -1,0 +1,32 @@
+{
+  "triggerOnUpdates": true,
+  "branches": ["master", "main"],
+  "strictness": 3,
+  "statusCheck": false,
+  "commentTypes": ["logic", "syntax", "style"],
+  "instructions": "Perform comprehensive security audit and code quality review of the entire codebase. Focus on:\n\n1. SECURITY VULNERABILITIES:\n   - SQL injection risks\n   - Input validation issues\n   - Authentication/authorization flaws\n   - API security weaknesses\n   - Credential exposure\n   - HTTP method validation\n   - Rate limiting gaps\n   \n2. CODE QUALITY:\n   - Error handling completeness\n   - Type safety issues\n   - Memory leaks\n   - Race conditions\n   - Edge case handling\n   \n3. N8N SPECIFIC:\n   - Proper credential handling\n   - Node execution context security\n   - Workflow validation\n   - Parameter sanitization\n   \n4. BEST PRACTICES:\n   - TypeScript strict mode compliance\n   - Consistent error messages\n   - Proper logging without secrets\n   - API documentation completeness\n   \nReview ALL files in the repository, not just changed files. Flag any potential security issues as HIGH priority.",
+  "customContext": {
+    "rules": [
+      {
+        "scope": ["**/*.ts", "**/*.js"],
+        "rule": "All user inputs must be validated and sanitized before use"
+      },
+      {
+        "scope": ["**/*.ts", "**/*.js"],
+        "rule": "Never log sensitive data like passwords, tokens, or API keys"
+      },
+      {
+        "scope": ["nodes/**/*.ts"],
+        "rule": "All API calls must have proper error handling with user-friendly messages"
+      },
+      {
+        "scope": ["nodes/**/*.ts"],
+        "rule": "HTTP methods must be validated against allowed methods (GET, POST, etc.)"
+      },
+      {
+        "scope": ["**/*.ts"],
+        "rule": "Use TypeScript strict mode and avoid 'any' types where possible"
+      }
+    ]
+  }
+}
