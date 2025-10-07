@@ -72,8 +72,30 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
 
-      - name: Determine version bump
+      - name: Check if version already bumped
+        id: check_version
+        run: |
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+          # Get version from previous commit (origin/master)
+          git fetch origin master
+          PREV_VERSION=$(git show origin/master:package.json | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8')).version")
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "prev_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+
+          if [[ "$CURRENT_VERSION" != "$PREV_VERSION" ]]; then
+            echo "version_changed=true" >> $GITHUB_OUTPUT
+            echo "Version already bumped manually: $PREV_VERSION → $CURRENT_VERSION"
+          else
+            echo "version_changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged, will auto-bump"
+          fi
+
+      - name: Determine version bump type (if needed)
         id: version
+        if: steps.check_version.outputs.version_changed == 'false'
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION_TYPE="${{ github.event.inputs.version }}"
@@ -92,12 +114,19 @@ jobs:
           fi
           echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
 
-      - name: Bump version
+      - name: Auto-bump version (if not already bumped)
         id: bump
+        if: steps.check_version.outputs.version_changed == 'false'
         run: |
           npm version ${{ steps.version.outputs.version_type }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           echo "new_version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Log manual version
+        if: steps.check_version.outputs.version_changed == 'true'
+        run: |
+          echo "✅ Using manually set version: ${{ steps.check_version.outputs.current_version }}"
+          echo "Skipping auto-bump - package.json already updated"
 
       - name: Publish to NPM
         run: npm publish --access public
