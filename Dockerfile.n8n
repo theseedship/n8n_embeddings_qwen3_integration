@@ -1,0 +1,43 @@
+FROM n8nio/n8n:latest
+
+USER root
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Create custom nodes directory
+RUN mkdir -p /home/node/.n8n/custom/nodes && \
+    chown -R node:node /home/node/.n8n
+
+USER node
+
+# Set working directory
+WORKDIR /home/node/.n8n/custom
+
+# Copy package files first for better caching
+COPY --chown=node:node package*.json ./
+
+# Install dependencies
+RUN npm ci --omit=dev || npm install --production
+
+# Copy the built node files
+COPY --chown=node:node dist ./dist
+
+# Ensure proper permissions
+USER root
+RUN chown -R node:node /home/node/.n8n/custom
+
+USER node
+
+# Set environment for custom nodes
+# N8N_USER_FOLDER is set via docker-compose
+ENV NODE_FUNCTION_ALLOW_EXTERNAL=@langchain/core
+
+EXPOSE 5678
+
+# Use the original entrypoint
+ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]

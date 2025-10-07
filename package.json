@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-qwen-embedding",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "n8n nodes for Qwen3-Embedding model integration - Generate text embeddings using self-hosted Qwen models",
   "keywords": [
     "n8n-community-node-package",

@@ -203,7 +203,8 @@ export class QwenEmbeddingTool implements INodeType {
 
 				if (operation === 'generateEmbedding') {
 					// Single text embedding
-					const text = this.getNodeParameter('text', itemIndex, '') as string;
+					const textParam = this.getNodeParameter('text', itemIndex, '');
+					const text = String(textParam); // Ensure it's converted to string
 					if (!text || text.trim() === '') {
 						throw new NodeOperationError(this.getNode(), 'Text input cannot be empty', {
 							itemIndex,
@@ -264,13 +265,13 @@ export class QwenEmbeddingTool implements INodeType {
 					// Prepare request body for Ollama
 					const requestBody = {
 						model: modelName,
-						input: text,
+						prompt: text,  // Ollama uses 'prompt' not 'input'
 					};
 
 					// Make HTTP request to Ollama embedding API
 					const requestOptions: IHttpRequestOptions = {
 						method: 'POST',
-						url: `${apiUrl}/api/embed`,
+						url: `${apiUrl}/api/embeddings`,
 						body: requestBody,
 						json: true,
 						returnFullResponse: false,
@@ -304,16 +305,16 @@ export class QwenEmbeddingTool implements INodeType {
 					}
 
 					// Validate response and extract embedding
-					if (!response || !response.embeddings) {
+					if (!response || !response.embedding) {
 						throw new NodeOperationError(
 							this.getNode(),
-							'Invalid response from Ollama: missing embeddings',
+							'Invalid response from Ollama: missing embedding',
 							{ itemIndex },
 						);
 					}
 
-					// Ollama returns embeddings directly
-					embeddings.push(response.embeddings);
+					// Ollama returns embedding directly
+					embeddings.push(response.embedding);
 				}
 
 				// Format output based on options

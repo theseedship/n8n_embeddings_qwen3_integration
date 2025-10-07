@@ -44,3 +44,9 @@ docs/drafts/
 # Temporary files
 *.tmp
 *.temp
+
+# Docker data volumes
+data/
+
+# Ignore packaged n8n node
+*.tgz

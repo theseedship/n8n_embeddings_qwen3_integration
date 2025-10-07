@@ -1,0 +1,13 @@
+# Modelfile for Qwen3-Embedding-0.6B emulation
+# Using qwen2.5:0.5b as base since actual Qwen3-Embedding is not available in GGUF format
+FROM qwen2.5:0.5b
+
+# Configure for embedding mode - matching Qwen3-Embedding configuration
+PARAMETER temperature 0
+PARAMETER top_k 1
+PARAMETER top_p 0.001
+PARAMETER repeat_penalty 1.0
+PARAMETER num_ctx 8192
+
+# System message optimized for embeddings generation
+SYSTEM "You are Qwen3-Embedding model. Generate dense vector representations for text retrieval and semantic similarity tasks. Focus on capturing semantic meaning and context."

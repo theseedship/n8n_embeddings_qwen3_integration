@@ -39,7 +39,7 @@ class QwenEmbeddings extends Embeddings {
 		for (const text of texts) {
 			const requestBody = {
 				model: this.modelName,
-				input: text,
+				prompt: text,  // Ollama uses 'prompt' not 'input'
 			};
 
 			// Use a simple timeout promise wrapper for Node.js compatibility
@@ -47,7 +47,7 @@ class QwenEmbeddings extends Embeddings {
 			const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
 			try {
-				const response = await fetch(`${this.apiUrl}/api/embed`, {
+				const response = await fetch(`${this.apiUrl}/api/embeddings`, {
 					method: 'POST',
 					headers,
 					body: JSON.stringify(requestBody),

@@ -1,0 +1,11 @@
+# Modelfile for Qwen Embedding
+FROM qwen2.5:0.5b
+
+# Configure for embedding mode
+PARAMETER temperature 0
+PARAMETER top_k 1
+PARAMETER top_p 0.001
+PARAMETER repeat_penalty 1.0
+
+# System message to optimize for embeddings
+SYSTEM "You are an embedding model. Convert the input text into a dense vector representation."
