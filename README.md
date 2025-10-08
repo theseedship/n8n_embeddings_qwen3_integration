@@ -63,9 +63,7 @@ Ollama will be available at `http://localhost:11434` by default
 
 ```
 ✅ CORRECT:   http://localhost:11434
-✅ CORRECT:   http://deposium-ollama:11434
 ❌ WRONG:     http://localhost:11434/
-❌ WRONG:     http://deposium-ollama:11434/
 ```
 
 **Why this matters:** A trailing slash creates a double-slash in the API path (`http://host:11434//api/embed`), which causes HTTP parsers to silently transform POST requests to GET requests, resulting in HTTP 405 "Method Not Allowed" errors.
