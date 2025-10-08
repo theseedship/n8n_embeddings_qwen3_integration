@@ -3,7 +3,6 @@ import type {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
-	IHttpRequestOptions,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
@@ -380,16 +379,8 @@ export class QwenEmbeddingTool implements INodeType {
 						input: sanitizeText(text), // Sanitize input before sending to API
 					};
 
-					// Make HTTP request to Ollama embedding API
-					const requestOptions: IHttpRequestOptions = {
-						method: 'POST',
-						url: `${apiUrl}/api/embed`,
-						body: requestBody,
-						json: true,
-						returnFullResponse: false,
-						timeout: requestTimeout,
-					};
-
+					// Make HTTP request to Ollama embedding API using native fetch
+					// NOTE: Using native fetch() because this.helpers.httpRequest transforms POST to GET
 					let response: any;
 					let attemptCount = 0;
 
@@ -397,9 +388,22 @@ export class QwenEmbeddingTool implements INodeType {
 					while (attemptCount <= maxRetries) {
 						try {
 							const requestStart = Date.now();
-							// Use simple httpRequest instead of httpRequestWithAuthentication
-							// to avoid authentication system transforming POST to GET
-							response = await this.helpers.httpRequest(requestOptions);
+
+							// Use native fetch API to avoid N8N helper POST→GET transformation
+							const fetchResponse = await fetch(`${apiUrl}/api/embed`, {
+								method: 'POST',
+								headers: {'Content-Type': 'application/json'},
+								body: JSON.stringify(requestBody),
+								signal: AbortSignal.timeout(requestTimeout),
+							});
+
+							if (!fetchResponse.ok) {
+								const error: any = new Error(`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`);
+								error.statusCode = fetchResponse.status;
+								throw error;
+							}
+
+							response = await fetchResponse.json();
 
 							// Auto-detection on first successful request
 							if (performanceMode === 'auto' && embeddings.length === 0) {
@@ -408,13 +412,11 @@ export class QwenEmbeddingTool implements INodeType {
 									// Fast response - likely GPU
 									requestTimeout = 10000;
 									maxRetries = 2;
-									requestOptions.timeout = requestTimeout;
 									// Auto-detection: GPU mode activated (timeout: 10s)
 								} else if (duration > 5000) {
 									// Slow response - likely CPU
 									requestTimeout = 60000;
 									maxRetries = 3;
-									requestOptions.timeout = requestTimeout;
 									// Auto-detection: CPU mode activated (timeout: 60s)
 								}
 							}
