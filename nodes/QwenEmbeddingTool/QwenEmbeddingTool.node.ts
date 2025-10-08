@@ -392,13 +392,15 @@ export class QwenEmbeddingTool implements INodeType {
 							// Use native fetch API to avoid N8N helper POST→GET transformation
 							const fetchResponse = await fetch(`${apiUrl}/api/embed`, {
 								method: 'POST',
-								headers: {'Content-Type': 'application/json'},
+								headers: { 'Content-Type': 'application/json' },
 								body: JSON.stringify(requestBody),
 								signal: AbortSignal.timeout(requestTimeout),
 							});
 
 							if (!fetchResponse.ok) {
-								const error: any = new Error(`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`);
+								const error: any = new Error(
+									`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`,
+								);
 								error.statusCode = fetchResponse.status;
 								throw error;
 							}

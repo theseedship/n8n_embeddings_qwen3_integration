@@ -57,6 +57,21 @@ Ollama will be available at `http://localhost:11434` by default
 
 ## 🔧 Setup
 
+### ⚠️ CRITICAL: Ollama URL Configuration
+
+**ALWAYS remove trailing slashes from your Ollama URL!**
+
+```
+✅ CORRECT:   http://localhost:11434
+✅ CORRECT:   http://deposium-ollama:11434
+❌ WRONG:     http://localhost:11434/
+❌ WRONG:     http://deposium-ollama:11434/
+```
+
+**Why this matters:** A trailing slash creates a double-slash in the API path (`http://host:11434//api/embed`), which causes HTTP parsers to silently transform POST requests to GET requests, resulting in HTTP 405 "Method Not Allowed" errors.
+
+This is the #1 cause of 405 errors with this node. Always verify your Ollama URL format first.
+
 ### 1. Configure Credentials (Optional)
 
 **For self-hosted Ollama without authentication:** You can skip credential configuration. The node will connect directly to your Ollama instance.
@@ -66,10 +81,11 @@ Ollama will be available at `http://localhost:11434` by default
 1. In n8n, go to **Credentials** > **New**
 2. Select **Qwen Embedding API (Ollama)**
 3. Enter:
-   - **Ollama URL**: `http://localhost:11434` (or your Ollama URL)
+   - **Ollama URL**: `http://localhost:11434` (**NO trailing slash!**)
    - **Model Name**: `qwen3-embedding:0.6b` (or your chosen model)
    - **API Key**: Your authentication token (if required)
-4. Click **Test Connection** to verify
+4. **IMPORTANT:** Verify your URL has NO trailing slash before saving
+5. Click **Test Connection** to verify
 
 ### 2. Using the Nodes
 
@@ -337,8 +353,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### HTTP 405 "Method Not Allowed" Errors
 
-If you encounter HTTP 405 errors, see the comprehensive [HTTP 405 Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md) which covers:
-- Root cause analysis
+**Most Common Cause (90% of cases):** Trailing slash in Ollama URL configuration.
+
+```bash
+# Check your credential configuration:
+✅ Correct: http://localhost:11434
+❌ Wrong:   http://localhost:11434/
+```
+
+**Quick Fix:**
+1. Go to N8N Credentials
+2. Edit your Ollama credential
+3. Remove the trailing slash from the URL
+4. Save and test again
+
+For other 405 error causes, see the comprehensive [HTTP 405 Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md) which covers:
+- URL formatting issues (trailing slashes)
 - N8N authentication system issues
 - Working patterns vs anti-patterns
 - Step-by-step verification

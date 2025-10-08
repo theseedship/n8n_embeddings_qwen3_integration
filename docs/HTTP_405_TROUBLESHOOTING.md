@@ -2,9 +2,77 @@
 
 ## Overview
 
-This document details the discovery, diagnosis, and resolution of a persistent HTTP 405 "Method Not Allowed" error in the N8N Qwen Embedding custom node where N8N was incorrectly sending GET requests to the Ollama API instead of POST requests.
+This document details the discovery, diagnosis, and resolution of HTTP 405 "Method Not Allowed" errors in the N8N Qwen Embedding custom node where requests to Ollama API are incorrectly sent as GET instead of POST.
 
-## Problem Summary
+## ⚠️ MOST COMMON CAUSE: Trailing Slash in URL (90% of cases)
+
+**Symptom:** HTTP 405 errors with Ollama logs showing `GET "/api/embed"` instead of `POST "/api/embed"`
+
+**Root Cause:** Trailing slash in Ollama URL configuration creates double-slash in API path.
+
+### The Bug Explained
+
+```
+When the node constructs the request:
+fetch(`${apiUrl}/api/embed`, { method: 'POST' })
+
+With apiUrl = "http://ollama:11434/" (with trailing slash):
+→ Result: http://ollama:11434//api/embed (double slash)
+→ HTTP parser SILENTLY transforms POST to GET (security/normalization behavior)
+→ Ollama receives: GET "/api/embed" → 405 Method Not Allowed ❌
+
+With apiUrl = "http://ollama:11434" (without trailing slash):
+→ Result: http://ollama:11434/api/embed (correct)
+→ POST request works normally ✅
+```
+
+### Why This Bug is Insidious
+
+1. **No obvious error:** Double slash doesn't generate a clear error message
+2. **Silent transformation:** POST→GET happens at HTTP parser level, invisible in code
+3. **Code looks correct:** Source shows `method: 'POST'` but runtime sends GET
+4. **Misleading logs:** Ollama just shows "405 Method Not Allowed" with no hint about the URL
+
+### Quick Fix
+
+**Check your Ollama credential configuration:**
+
+```bash
+# In N8N:
+1. Go to Credentials → Ollama API
+2. Check the "Ollama URL" field
+3. Remove any trailing slash
+
+✅ CORRECT:   http://localhost:11434
+✅ CORRECT:   http://deposium-ollama:11434
+❌ WRONG:     http://localhost:11434/
+❌ WRONG:     http://deposium-ollama:11434/
+```
+
+**After fixing:**
+1. Save the credential
+2. Restart your workflow
+3. Test again - should get 200 OK with POST
+
+### Verification
+
+Watch Ollama logs to confirm fix:
+
+```bash
+# Before fix:
+[GIN] | 405 | GET "/api/embed"  ❌
+
+# After fix:
+[GIN] | 200 | POST "/api/embed" ✅
+```
+
+---
+
+## Other Less Common Causes
+
+If removing the trailing slash doesn't fix your issue, check these:
+
+### Problem Summary (Historical)
 
 **Symptom:** Ollama API rejected embedding requests with HTTP 405 errors.
 
@@ -435,12 +503,20 @@ The performance mode auto-detection correctly identified GPU:
 
 ## Recommendations
 
+### CRITICAL: URL Configuration
+
+1. ✅ **ALWAYS remove trailing slashes** from Ollama URL
+2. ✅ Verify URL format before saving credentials
+3. ✅ Double-check after any configuration changes
+4. ✅ Watch Ollama logs to confirm POST requests
+
 ### For Self-Hosted Ollama (No Authentication)
 
 1. ✅ Use `required: false` for credentials
 2. ✅ Use `this.helpers.httpRequest()` instead of `httpRequestWithAuthentication`
 3. ✅ Set reasonable timeouts (10s for GPU, 60s for CPU)
 4. ✅ Enable auto-detection for dynamic environments
+5. ✅ **NO trailing slash in URL configuration**
 
 ### For Authenticated Ollama Instances
 
@@ -468,6 +544,8 @@ The performance mode auto-detection correctly identified GPU:
 - **v0.4.0:** Reverted to Railway code - Failed due to missing credentials
 - **v0.4.1:** Fixed credentials + httpRequest - Partial success (POST working, response field wrong)
 - **v0.4.2:** Fixed response field to embeddings[0] - **COMPLETE SUCCESS**
+- **v0.7.0-0.7.1:** Migrated to native fetch() - Discovered trailing slash bug
+- **v0.7.2:** **CRITICAL DOCUMENTATION UPDATE** - Added prominent warnings about trailing slash issue
 
 ## Contributors
 
