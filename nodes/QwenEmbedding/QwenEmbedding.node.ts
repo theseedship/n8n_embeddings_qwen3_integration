@@ -178,17 +178,17 @@ class QwenEmbeddings extends Embeddings {
 
 						if (duration < gpuThreshold) {
 							// Fast response - likely GPU
-							autoDetectedTimeout = 10000;
+							autoDetectedTimeout = 30000;
 							autoDetectedRetries = 2;
 							console.log(
-								`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`,
+								`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 30s.`,
 							);
 						} else if (duration > cpuThreshold) {
 							// Slow response - likely CPU
-							autoDetectedTimeout = 60000;
+							autoDetectedTimeout = 120000;
 							autoDetectedRetries = 3;
 							console.log(
-								`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`,
+								`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 120s.`,
 							);
 						} else {
 							// Medium speed - keep defaults
@@ -399,23 +399,23 @@ export class QwenEmbedding implements INodeType {
 						displayName: 'Performance Mode',
 						name: 'performanceMode',
 						type: 'options',
-						default: 'auto',
+						default: 'gpu',
 						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
 						options: [
 							{
-								name: 'Auto-Detect',
-								value: 'auto',
-								description: 'Automatically detect GPU/CPU on first request (recommended)',
-							},
-							{
 								name: 'GPU Optimized',
 								value: 'gpu',
-								description: 'Fast inference with GPU: 10s timeout, 2 retries',
+								description: 'Fast inference with GPU: 30s timeout, 2 retries (recommended)',
 							},
 							{
 								name: 'CPU Optimized',
 								value: 'cpu',
-								description: 'Slower CPU inference: 60s timeout, 3 retries',
+								description: 'Slower CPU inference: 120s timeout, 3 retries',
+							},
+							{
+								name: 'Auto-Detect',
+								value: 'auto',
+								description: 'Auto-detect GPU/CPU (unreliable, not recommended)',
 							},
 							{
 								name: 'Custom',
@@ -459,17 +459,17 @@ export class QwenEmbedding implements INodeType {
 			}
 
 			// Calculate timeout and retries based on performance mode
-			const performanceMode = options.performanceMode || 'auto';
+			const performanceMode = options.performanceMode || 'gpu';
 			let requestTimeout: number;
 			let maxRetries: number;
 
 			switch (performanceMode) {
 				case 'gpu':
-					requestTimeout = 10000; // 10 seconds for GPU
+					requestTimeout = 30000; // 30 seconds for GPU (increased for long texts)
 					maxRetries = 2;
 					break;
 				case 'cpu':
-					requestTimeout = 60000; // 60 seconds for CPU
+					requestTimeout = 120000; // 120 seconds for CPU
 					maxRetries = 3;
 					break;
 				case 'custom':

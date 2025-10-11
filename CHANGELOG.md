@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2025-10-12
+
+### 🎯 Major Fixes for Performance & Format Issues
+
+**FIXED: Auto-detection unreliability and compact format for batch embeddings**
+
+### Fixed
+
+- **Compact Format for Batch Embeddings**: Now truly outputs on a single line
+  - **Before**: Array of strings - each shown on separate line in n8n
+  - **After**: Single JSON string - everything on ONE line
+  - Works for both single and batch embeddings
+  - Perfect for copy/paste of multiple embeddings
+
+- **Changed Default Performance Mode**: GPU is now default instead of auto-detect
+  - **Auto-detect moved to 3rd option** with warning it's unreliable
+  - GPU mode is now first and default
+  - Prevents confusing timeout issues
+
+- **Increased Timeouts**: More realistic for long texts
+  - **GPU**: 30s (was 10s) - handles long texts without timeout
+  - **CPU**: 120s (was 60s) - enough for very long texts
+  - Auto-detection also uses these new values
+
+### Technical Details
+
+**Compact Format Fix:**
+```typescript
+// Before: Array of strings (multiple lines in n8n)
+embeddings.map(e => `[${e.join(',')}]`)
+
+// After: Single JSON string (one line)
+JSON.stringify(embeddings).replace(/\s+/g, '')
+```
+
+**Default Mode Change:**
+```typescript
+default: 'gpu' // was 'auto'
+```
+
+### Why These Changes
+
+- Auto-detection is fundamentally flawed:
+  - Based only on first request timing
+  - Short texts detect "fast" even on CPU
+  - No API to check actual GPU availability
+  - Docker GPU passthrough adds complexity
+
+- Recommendation: Always use fixed GPU or CPU mode
+
 ## [0.8.4] - 2025-10-12
 
 ### 🔧 Critical Auto-Detection Fix
