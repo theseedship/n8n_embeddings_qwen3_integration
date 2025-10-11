@@ -1,22 +1,24 @@
-# n8n-nodes-qwen-embedding
+# n8n-nodes-ollama-embeddings
 
 [![NPM Version](https://img.shields.io/npm/v/n8n-nodes-qwen-embedding)](https://www.npmjs.com/package/n8n-nodes-qwen-embedding)
 [![License](https://img.shields.io/npm/l/n8n-nodes-qwen-embedding)](https://github.com/theseedship/deposium_n8n_embeddings_integration/blob/master/LICENSE)
 [![n8n Community](https://img.shields.io/badge/n8n-community_node-orange)](https://n8n.io/integrations)
 
-n8n community nodes for integrating Qwen embeddings via Ollama with your n8n workflows. Generate high-quality text embeddings using Ollama-hosted Qwen models for vector stores, similarity search, and AI applications.
+n8n community nodes for generating text embeddings via Ollama with your n8n workflows. Supports multiple embedding models including **Qwen**, **EmbeddingGemma**, **Nomic** and more for vector stores, similarity search, and AI applications.
 
 ## 🌟 Features
 
 - **Two Specialized Nodes**:
-  - **Qwen Embedding**: For vector store integration (Supabase, Qdrant, PGVector, etc.)
-  - **Qwen Embedding Tool**: For direct embedding generation in workflows
+  - **Ollama Embeddings**: For vector store integration (Supabase, Qdrant, PGVector, etc.)
+  - **Ollama Embeddings Tool**: For direct embedding generation in workflows
+- **Multi-Model Support**: Works with Qwen, EmbeddingGemma, Nomic, Snowflake and more
 - **LangChain Compatible**: Seamlessly integrates with n8n's AI ecosystem
-- **Flexible Dimensions**: Support for 32-1024 dimensions via MRL (Matryoshka Representation Learning)
+- **Flexible Dimensions**: Auto-detection and validation based on model capabilities
 - **Instruction-Aware**: Optimized embeddings for queries vs documents
 - **Batch Processing**: Efficient bulk embedding generation
 - **Ollama Integration**: Direct connection to Ollama for embedding generation
 - **No Middleware Required**: Works directly with Ollama's API endpoints
+- **Compact Format Option**: Single-line embeddings for easy copy/paste
 
 ## 📦 Installation
 
@@ -38,14 +40,20 @@ You need to have Ollama installed and running with a Qwen model:
 
 1. **Install Ollama**: Visit [https://ollama.com](https://ollama.com) for installation instructions
 
-2. **Pull a Qwen embedding model**:
+2. **Pull an embedding model**:
 ```bash
 # Qwen3-Embedding models (specialized for embeddings):
-ollama pull qwen3-embedding:0.6b  # Recommended - 1024 dimensions
-ollama pull qwen3-embedding:latest
+ollama pull qwen3-embedding:0.6b  # 1024 dimensions, 32K context
 
-# Note: Use qwen3-embedding models for best embedding quality
-# Generic qwen2.5 models can also generate embeddings but are optimized for chat
+# EmbeddingGemma models (Google's lightweight embeddings):
+ollama pull embeddinggemma:300m  # 768 dimensions, 2K context
+ollama pull embeddinggemma:300m-bf16  # Higher precision variant
+
+# Nomic Embed models (performant embeddings):
+ollama pull nomic-embed-text  # 768 dimensions, 8K context
+
+# Snowflake Arctic Embed:
+ollama pull snowflake-arctic-embed:110m  # 1024 dimensions
 ```
 
 3. **Verify Ollama is running**:
@@ -54,6 +62,21 @@ ollama list  # Should show your pulled models
 ```
 
 Ollama will be available at `http://localhost:11434` by default
+
+## 📊 Supported Models Comparison
+
+| Model | Dimensions | Context | Size | Best For |
+|-------|------------|---------|------|----------|
+| **qwen3-embedding:0.6b** | 32-1024 (flexible) | 32K tokens | ~639MB | General purpose, multilingual |
+| **embeddinggemma:300m** | 128-768 (MRL) | 2K tokens | ~338MB | Lightweight, fast inference |
+| **nomic-embed-text** | 768 (fixed) | 8K tokens | ~274MB | Balanced performance |
+| **snowflake-arctic-embed** | 1024 (fixed) | 512 tokens | ~332MB | Short text, high precision |
+
+**Choosing a Model:**
+- **Qwen**: Best overall flexibility with largest context window (32K)
+- **EmbeddingGemma**: Best for resource-constrained environments
+- **Nomic**: Good balance of performance and context size
+- **Snowflake**: Optimized for short text with high dimensional output
 
 ## 🔧 Setup
 
@@ -151,15 +174,16 @@ First request measures actual response time:
 
 ### Dimensions
 
-Adjust embedding vector size (32-1024 dimensions):
+Adjust embedding vector size based on model capabilities:
 
-- **Default**: 1024 (full model dimensions)
-- **Recommended ranges**:
-  - 128-256: Smaller databases, faster similarity search
-  - 512: Balanced performance/quality
-  - 1024: Maximum quality (default)
+- **Auto-detect (0)**: Uses optimal dimensions for the selected model
+- **Manual adjustment**: Set specific dimensions (validated per model)
+  - Qwen: 32-1024 (flexible via MRL)
+  - EmbeddingGemma: 128-768 (flexible via MRL)
+  - Nomic: 768 (fixed)
+  - Snowflake: 1024 (fixed)
 
-**Implementation:** Uses Matryoshka Representation Learning (MRL) - dimensions are truncated or padded to match your target size without retraining the model.
+**Implementation:** Models with MRL support (Qwen, EmbeddingGemma) can adjust dimensions without retraining. Fixed-dimension models will show a warning if you try to adjust.
 
 ### Instruction Type
 
@@ -303,13 +327,22 @@ Fine-tune request behavior:
 
 ### Model Information
 
-- **Recommended Model**: `qwen3-embedding:0.6b`
-  - 1024 native dimensions
-  - MRL support (Matryoshka Representation Learning)
-  - Adjustable dimensions: 32-1024
-  - Multilingual support (100+ languages)
-- **Alternative Models**: Any Ollama-compatible embedding model
-- **Provider**: Ollama (local inference, no external API calls)
+**Qwen Models:**
+- `qwen3-embedding:0.6b` - 1024d, 32K context, multilingual (100+ languages)
+- MRL support for flexible dimensions (32-1024)
+
+**EmbeddingGemma Models:**
+- `embeddinggemma:300m` - 768d, 2K context, lightweight
+- MRL support for flexible dimensions (128-768)
+- Variants: bf16, q8, q4 for different precision/size tradeoffs
+
+**Nomic Models:**
+- `nomic-embed-text` - 768d, 8K context, balanced performance
+- Fixed dimensions (no MRL)
+
+**Snowflake Models:**
+- `snowflake-arctic-embed` - 1024d, 512 context, high precision
+- Fixed dimensions (no MRL)
 
 ### Performance Characteristics
 

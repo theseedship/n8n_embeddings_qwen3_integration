@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-10-11
+
+### 🚀 Multi-Model Support Release
+
+**MAJOR UPDATE: Support for Multiple Embedding Models**
+
+This release transforms the nodes from Qwen-only to multi-model support, intelligently adapting to different embedding models available in Ollama.
+
+### Added
+
+- **Multi-Model Support**: Full support for multiple embedding model families
+  - **Qwen**: `qwen3-embedding:0.6b` (1024d, 32K context)
+  - **EmbeddingGemma**: `embeddinggemma:300m` (768d, 2K context)
+  - **Nomic**: `nomic-embed-text` (768d, 8K context)
+  - **Snowflake**: `snowflake-arctic-embed` (1024d, 512 context)
+
+- **Model Capabilities Auto-Detection**:
+  - Automatically detects model specifications (max dimensions, context length)
+  - Validates dimension requests against model capabilities
+  - Smart defaults based on selected model
+
+- **Compact Format Option**: New boolean option to output embeddings in single-line format
+  - Easier to copy/paste embeddings
+  - Reduces visual clutter in n8n UI
+  - Available in QwenEmbeddingTool node
+
+### Changed
+
+- **Node Display Names**: Updated to reflect multi-model support
+  - `Qwen Embedding` → `Ollama Embeddings`
+  - `Qwen Embedding Tool` → `Ollama Embeddings Tool`
+
+- **Dimensions Handling**: Improved dimension management
+  - Default `0` = auto-detect from model
+  - Automatic validation against model maximum
+  - Warning messages when exceeding model limits
+
+- **Model Name Parameter**: Enhanced with better examples and hints
+  - Added model-specific dimension info in hints
+  - Updated placeholders with popular models
+  - Better description of supported models
+
+### Technical Improvements
+
+- **getModelCapabilities() Function**: Centralized model detection
+  ```typescript
+  // Automatically detects:
+  - maxDimensions: Model's maximum embedding dimensions
+  - maxTokens: Maximum context length
+  - defaultDimensions: Optimal default dimensions
+  - supportsInstructions: Whether query/document instructions work
+  - modelFamily: Model family for specific handling
+  ```
+
+- **Smart Dimension Validation**:
+  - Qwen: 32-1024 (flexible via MRL)
+  - EmbeddingGemma: 128-768 (flexible via MRL)
+  - Nomic: 768 (fixed)
+  - Snowflake: 1024 (fixed)
+
+### Documentation
+
+- **README.md**: Complete rewrite for multi-model support
+  - Model comparison table
+  - Model selection guide
+  - Updated examples for each model type
+  - Performance characteristics per model
+
+- **Package Metadata**: Updated for better discoverability
+  - New keywords: ollama, embeddinggemma, gemma, nomic-embed, multi-model
+  - Updated description to mention all supported models
+
+### Backward Compatibility
+
+- Existing workflows continue to work unchanged
+- Default model remains `qwen3-embedding:0.6b`
+- All previous options retained and functional
+
+### Migration Notes
+
+No breaking changes. To use new models:
+1. Pull the desired model: `ollama pull embeddinggemma:300m`
+2. Update the Model Name parameter in your nodes
+3. Dimensions will auto-adjust to model capabilities
+
 ## [0.4.2] - 2025-10-07
 
 ### Fixed - COMPLETE HTTP 405 RESOLUTION ✅

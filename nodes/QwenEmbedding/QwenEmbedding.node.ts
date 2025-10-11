@@ -7,6 +7,61 @@ import type {
 import { NodeOperationError } from 'n8n-workflow';
 import { Embeddings, EmbeddingsParams } from '@langchain/core/embeddings';
 
+// Model capabilities detection
+interface ModelCapabilities {
+	maxDimensions: number;
+	maxTokens: number;
+	defaultDimensions: number;
+	supportsInstructions: boolean;
+	modelFamily: string;
+}
+
+function getModelCapabilities(modelName: string): ModelCapabilities {
+	const lowerModel = modelName.toLowerCase();
+
+	// EmbeddingGemma models
+	if (lowerModel.includes('embeddinggemma') || lowerModel.includes('embedding-gemma')) {
+		return {
+			maxDimensions: 768,
+			maxTokens: 2048,
+			defaultDimensions: 768,
+			supportsInstructions: true,
+			modelFamily: 'gemma',
+		};
+	}
+
+	// Nomic Embed models
+	if (lowerModel.includes('nomic-embed')) {
+		return {
+			maxDimensions: 768,
+			maxTokens: 8192,
+			defaultDimensions: 768,
+			supportsInstructions: true,
+			modelFamily: 'nomic',
+		};
+	}
+
+	// Snowflake Arctic Embed models
+	if (lowerModel.includes('snowflake-arctic-embed')) {
+		return {
+			maxDimensions: 1024,
+			maxTokens: 512,
+			defaultDimensions: 1024,
+			supportsInstructions: false,
+			modelFamily: 'snowflake',
+		};
+	}
+
+	// Default to Qwen capabilities (most flexible)
+	return {
+		maxDimensions: 1024,
+		maxTokens: 32768, // 32K context for Qwen3
+		defaultDimensions: 1024,
+		supportsInstructions: true,
+		modelFamily: 'qwen',
+	};
+}
+
 // LangChain-compatible Ollama Qwen Embeddings class
 class QwenEmbeddings extends Embeddings {
 	apiUrl: string;
@@ -170,14 +225,14 @@ interface QwenEmbeddingsParams extends EmbeddingsParams {
 
 export class QwenEmbedding implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Qwen Embedding',
+		displayName: 'Ollama Embeddings',
 		name: 'qwenEmbedding',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["instruction"] || "Generate embedding"}}',
-		description: 'Generate text embeddings using Qwen3-Embedding model',
+		description: 'Generate text embeddings using Ollama models (Qwen, EmbeddingGemma, Nomic, etc.)',
 		defaults: {
-			name: 'Qwen Embedding',
+			name: 'Ollama Embeddings',
 		},
 		inputs: [],
 		outputs: ['ai_embedding'],
@@ -207,9 +262,11 @@ export class QwenEmbedding implements INodeType {
 				name: 'modelName',
 				type: 'string',
 				default: 'qwen3-embedding:0.6b',
-				placeholder: 'e.g., qwen3-embedding:0.6b, qwen2:0.5b, qwen2:1.5b, nomic-embed-text',
-				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
+				placeholder: 'e.g., qwen3-embedding:0.6b, embeddinggemma:300m, nomic-embed-text',
+				description:
+					'The Ollama embedding model to use (must be pulled in Ollama first). Supports Qwen, EmbeddingGemma, Nomic and more.',
 				required: true,
+				hint: 'Supported models: qwen3-embedding (1024d), embeddinggemma (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
 			},
 			{
 				displayName: 'Options',
@@ -248,14 +305,15 @@ export class QwenEmbedding implements INodeType {
 						displayName: 'Dimensions',
 						name: 'dimensions',
 						type: 'number',
-						default: 1024,
-						description: 'Number of dimensions for the embedding vector (32-1024 via MRL)',
+						default: 0,
+						description:
+							'Number of dimensions for the embedding vector (0 = auto-detect from model)',
 						typeOptions: {
-							minValue: 32,
+							minValue: 0,
 							maxValue: 1024,
 							numberStepSize: 1,
 						},
-						hint: 'Qwen3 supports flexible dimensions from 32 to 1024 without retraining',
+						hint: 'Max dimensions vary by model: Qwen (32-1024), EmbeddingGemma (128-768), Nomic (768). Set to 0 for automatic detection.',
 					},
 					{
 						displayName: 'Instruction Type',
@@ -346,6 +404,21 @@ export class QwenEmbedding implements INodeType {
 				maxRetries?: number;
 			};
 
+			// Get model capabilities
+			const capabilities = getModelCapabilities(modelName);
+
+			// Handle dimensions (0 = auto-detect from model)
+			let dimensions = options.dimensions || 0;
+			if (dimensions === 0) {
+				dimensions = capabilities.defaultDimensions;
+			} else if (dimensions > capabilities.maxDimensions) {
+				// Warn and cap dimensions to model's maximum
+				console.warn(
+					`Warning: Requested dimensions (${dimensions}) exceed model maximum (${capabilities.maxDimensions}). Using ${capabilities.maxDimensions}.`,
+				);
+				dimensions = capabilities.maxDimensions;
+			}
+
 			// Calculate timeout and retries based on performance mode
 			const performanceMode = options.performanceMode || 'auto';
 			let requestTimeout: number;
@@ -375,7 +448,7 @@ export class QwenEmbedding implements INodeType {
 				apiUrl: credentials.baseUrl as string,
 				apiKey: credentials.apiKey as string | undefined,
 				modelName: modelName || 'qwen3-embedding:0.6b',
-				dimensions: options.dimensions || 1024,
+				dimensions: dimensions,
 				instruction: options.instruction !== 'none' ? options.instruction : undefined,
 				prefix: options.prefix,
 				performanceMode: performanceMode,
@@ -390,7 +463,7 @@ export class QwenEmbedding implements INodeType {
 		} catch (error) {
 			throw new NodeOperationError(
 				this.getNode(),
-				`Failed to initialize Qwen embeddings: ${error.message}`,
+				`Failed to initialize embeddings: ${error.message}`,
 			);
 		}
 	}

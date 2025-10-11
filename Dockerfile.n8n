@@ -1,16 +1,14 @@
-FROM n8nio/n8n:latest
+FROM n8nio/n8n:1.70.0
 
 USER root
 
-# Install build dependencies
+# Install build dependencies and create custom nodes directory
 RUN apk add --no-cache \
-    python3 \
-    make \
     g++ \
-    git
-
-# Create custom nodes directory
-RUN mkdir -p /home/node/.n8n/custom/nodes && \
+    git \
+    make \
+    python3 && \
+    mkdir -p /home/node/.n8n/custom/nodes && \
     chown -R node:node /home/node/.n8n
 
 USER node
@@ -38,6 +36,10 @@ USER node
 ENV NODE_FUNCTION_ALLOW_EXTERNAL=@langchain/core
 
 EXPOSE 5678
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
 
 # Use the original entrypoint
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]

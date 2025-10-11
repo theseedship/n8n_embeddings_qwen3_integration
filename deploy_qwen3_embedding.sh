@@ -86,7 +86,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         fi
         echo "   ⏳ Still pulling... ($((i*5))/300 seconds)"
 
-        if [ $i -eq 60 ]; then
+        if [ "$i" -eq 60 ]; then
             echo "   ⚠️  Pull is taking longer than expected. Check Railway logs for details."
         fi
     done
@@ -123,9 +123,9 @@ echo "   - Context Length: 32K tokens"
 echo "   - Embedding Dimensions: 1024 (default)"
 echo ""
 echo "🔧 Example cURL request:"
-echo 'curl -X POST '"$OLLAMA_URL"'/api/embeddings \'
+echo "curl -X POST $OLLAMA_URL/api/embeddings \\"
 echo '  -H "Content-Type: application/json" \'
-echo '  -d '"'"'{"model": "'"$MODEL_NAME"'", "prompt": "Your text here"}'"'"
+echo "  -d '{\"model\": \"$MODEL_NAME\", \"prompt\": \"Your text here\"}'"
 echo ""
 echo "🔗 For n8n integration, use:"
 echo "   - URL: $OLLAMA_URL/api/embeddings"

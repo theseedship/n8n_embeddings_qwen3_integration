@@ -6,6 +6,61 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
+// Model capabilities detection
+interface ModelCapabilities {
+	maxDimensions: number;
+	maxTokens: number;
+	defaultDimensions: number;
+	supportsInstructions: boolean;
+	modelFamily: string;
+}
+
+function getModelCapabilities(modelName: string): ModelCapabilities {
+	const lowerModel = modelName.toLowerCase();
+
+	// EmbeddingGemma models
+	if (lowerModel.includes('embeddinggemma') || lowerModel.includes('embedding-gemma')) {
+		return {
+			maxDimensions: 768,
+			maxTokens: 2048,
+			defaultDimensions: 768,
+			supportsInstructions: true,
+			modelFamily: 'gemma',
+		};
+	}
+
+	// Nomic Embed models
+	if (lowerModel.includes('nomic-embed')) {
+		return {
+			maxDimensions: 768,
+			maxTokens: 8192,
+			defaultDimensions: 768,
+			supportsInstructions: true,
+			modelFamily: 'nomic',
+		};
+	}
+
+	// Snowflake Arctic Embed models
+	if (lowerModel.includes('snowflake-arctic-embed')) {
+		return {
+			maxDimensions: 1024,
+			maxTokens: 512,
+			defaultDimensions: 1024,
+			supportsInstructions: false,
+			modelFamily: 'snowflake',
+		};
+	}
+
+	// Default to Qwen capabilities (most flexible)
+	return {
+		maxDimensions: 1024,
+		maxTokens: 32768, // 32K context for Qwen3
+		defaultDimensions: 1024,
+		supportsInstructions: true,
+		modelFamily: 'qwen',
+	};
+}
+
 // Security helper functions
 function validateUrl(url: string): string {
 	try {
@@ -28,14 +83,15 @@ function sanitizeText(text: string): string {
 
 export class QwenEmbeddingTool implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Qwen Embedding Tool',
+		displayName: 'Ollama Embeddings Tool',
 		name: 'qwenEmbeddingTool',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"] || "Generate embeddings"}}',
-		description: 'Generate text embeddings using Qwen3-Embedding model as a tool',
+		description:
+			'Generate text embeddings using Ollama models (Qwen, EmbeddingGemma, Nomic, etc.) as a tool',
 		defaults: {
-			name: 'Qwen Embedding Tool',
+			name: 'Ollama Embeddings Tool',
 		},
 		inputs: ['main'],
 		outputs: ['main'],
@@ -53,9 +109,11 @@ export class QwenEmbeddingTool implements INodeType {
 				name: 'modelName',
 				type: 'string',
 				default: 'qwen3-embedding:0.6b',
-				placeholder: 'e.g., qwen3-embedding:0.6b, qwen2:0.5b, qwen2:1.5b, nomic-embed-text',
-				description: 'The Qwen model to use for embeddings (must be pulled in Ollama)',
+				placeholder: 'e.g., qwen3-embedding:0.6b, embeddinggemma:300m, nomic-embed-text',
+				description:
+					'The Ollama embedding model to use (must be pulled in Ollama first). Supports Qwen, EmbeddingGemma, Nomic and more.',
 				required: true,
+				hint: 'Supported models: qwen3-embedding (1024d), embeddinggemma (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
 			},
 			{
 				displayName: 'Operation',
@@ -117,6 +175,14 @@ export class QwenEmbeddingTool implements INodeType {
 				default: {},
 				options: [
 					{
+						displayName: 'Compact Format',
+						name: 'compactFormat',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to format embeddings in a single line (easier to copy/paste)',
+						hint: 'When enabled, embeddings are output as a single line instead of multi-line JSON',
+					},
+					{
 						displayName: 'Context Prefix',
 						name: 'prefix',
 						type: 'string',
@@ -146,14 +212,15 @@ export class QwenEmbeddingTool implements INodeType {
 						displayName: 'Dimensions',
 						name: 'dimensions',
 						type: 'number',
-						default: 1024,
-						description: 'Number of dimensions for the embedding vector (32-1024 via MRL)',
+						default: 0,
+						description:
+							'Number of dimensions for the embedding vector (0 = auto-detect from model)',
 						typeOptions: {
-							minValue: 32,
+							minValue: 0,
 							maxValue: 1024,
 							numberStepSize: 1,
 						},
-						hint: 'Qwen3 supports flexible dimensions from 32 to 1024 without retraining',
+						hint: 'Max dimensions vary by model: Qwen (32-1024), EmbeddingGemma (128-768), Nomic (768). Set to 0 for automatic detection.',
 					},
 					{
 						displayName: 'Include Metadata',
@@ -283,6 +350,7 @@ export class QwenEmbeddingTool implements INodeType {
 					performanceMode?: string;
 					customTimeout?: number;
 					maxRetries?: number;
+					compactFormat?: boolean;
 				};
 
 				// Calculate timeout and retries based on performance mode
@@ -474,18 +542,31 @@ export class QwenEmbeddingTool implements INodeType {
 						);
 					}
 
-					// Apply dimension adjustment if specified
+					// Get model capabilities and apply dimension adjustment
+					const capabilities = getModelCapabilities(modelName);
 					let embedding = response.embeddings[0];
-					if (options.dimensions && options.dimensions > 0) {
-						const targetDim = options.dimensions;
-						const currentDim = embedding.length;
 
-						if (targetDim < currentDim) {
+					// Handle dimensions (0 = auto-detect from model)
+					let targetDim = options.dimensions || 0;
+					if (targetDim === 0) {
+						// Use model default dimensions (no adjustment needed)
+						targetDim = embedding.length;
+					} else if (targetDim > capabilities.maxDimensions) {
+						// Warn and cap dimensions to model's maximum
+						console.warn(
+							`Warning: Requested dimensions (${targetDim}) exceed model maximum (${capabilities.maxDimensions}). Using ${capabilities.maxDimensions}.`,
+						);
+						targetDim = capabilities.maxDimensions;
+					}
+
+					// Apply dimension adjustment if needed
+					if (targetDim !== embedding.length) {
+						if (targetDim < embedding.length) {
 							// Truncate to desired dimensions
 							embedding = embedding.slice(0, targetDim);
-						} else if (targetDim > currentDim) {
+						} else if (targetDim > embedding.length) {
 							// Pad with zeros if requested dimensions exceed embedding size
-							const padding = new Array(targetDim - currentDim).fill(0);
+							const padding = new Array(targetDim - embedding.length).fill(0);
 							embedding = [...embedding, ...padding];
 						}
 					}
@@ -496,6 +577,16 @@ export class QwenEmbeddingTool implements INodeType {
 
 				// Format output based on options
 				const returnFormat = options.returnFormat || 'full';
+				const compactFormat = options.compactFormat || false;
+
+				// Helper function to format embedding array
+				const formatEmbedding = (embedding: number[]) => {
+					if (compactFormat) {
+						// Return as a single-line string for easy copy/paste
+						return JSON.stringify(embedding);
+					}
+					return embedding;
+				};
 
 				if (operation === 'generateEmbedding') {
 					// Single embedding response
@@ -503,18 +594,18 @@ export class QwenEmbeddingTool implements INodeType {
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embedding: embeddings[0],
+							embedding: formatEmbedding(embeddings[0]),
 						};
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							text: texts[0],
-							vector: embeddings[0],
+							vector: formatEmbedding(embeddings[0]),
 							dimensions: embeddings[0].length,
 						};
 					} else {
 						// Full response
 						outputItem = {
-							embedding: embeddings[0],
+							embedding: formatEmbedding(embeddings[0]),
 							dimensions: embeddings[0].length,
 							text: texts[0],
 							model: modelName,
@@ -540,18 +631,18 @@ export class QwenEmbeddingTool implements INodeType {
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embeddings: embeddings,
+							embeddings: embeddings.map(formatEmbedding),
 						};
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							count: texts.length,
-							vectors: embeddings,
+							vectors: embeddings.map(formatEmbedding),
 							dimensions: embeddings[0] ? embeddings[0].length : 0,
 						};
 					} else {
 						// Full response
 						outputItem = {
-							embeddings: embeddings,
+							embeddings: embeddings.map(formatEmbedding),
 							texts: texts,
 							count: texts.length,
 							dimensions: embeddings[0] ? embeddings[0].length : 0,
@@ -573,7 +664,7 @@ export class QwenEmbeddingTool implements INodeType {
 					if (returnFormat === 'full' && texts.length === embeddings.length) {
 						outputItem.items = texts.map((text, idx) => ({
 							text: text,
-							embedding: embeddings[idx],
+							embedding: formatEmbedding(embeddings[idx]),
 						}));
 					}
 

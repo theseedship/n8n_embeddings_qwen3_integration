@@ -21,7 +21,7 @@ def wake_ollama_service() -> bool:
         if response.status_code == 200:
             print("✅ Ollama service is active")
             return True
-    except:
+    except requests.RequestException:
         pass
 
     print("⏰ Waking up Ollama service...")
@@ -35,7 +35,7 @@ def wake_ollama_service() -> bool:
             if response.status_code == 200:
                 print("✅ Ollama service is now active!")
                 return True
-        except:
+        except requests.RequestException:
             pass
         print(f"⏳ Waiting... ({(i+1)*5}/60 seconds)")
 
@@ -45,7 +45,7 @@ def wake_ollama_service() -> bool:
 def list_models() -> List[str]:
     """List all available models."""
     try:
-        response = requests.get(f"{OLLAMA_URL}/api/tags")
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=10)
         if response.status_code == 200:
             models = response.json().get("models", [])
             return [model["name"] for model in models]
@@ -62,7 +62,8 @@ def pull_model(model_name: str) -> bool:
         response = requests.post(
             f"{OLLAMA_URL}/api/pull",
             json={"name": model_name},
-            stream=True
+            stream=True,
+            timeout=300
         )
 
         for line in response.iter_lines():
@@ -92,7 +93,8 @@ def generate_embedding(text: str, model: str = MODEL_NAME) -> Dict[str, Any]:
             json={
                 "model": model,
                 "prompt": text
-            }
+            },
+            timeout=30
         )
 
         if response.status_code == 200:

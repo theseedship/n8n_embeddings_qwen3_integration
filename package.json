@@ -1,18 +1,23 @@
 {
   "name": "n8n-nodes-qwen-embedding",
-  "version": "0.7.4",
-  "description": "n8n nodes for Qwen3-Embedding model integration - Generate text embeddings using self-hosted Qwen models",
+  "version": "0.8.0",
+  "description": "n8n nodes for Ollama embeddings - Support for Qwen, EmbeddingGemma, Nomic and more. Generate text embeddings for vector stores and AI applications.",
   "keywords": [
     "n8n-community-node-package",
     "n8n",
     "n8n-nodes",
+    "ollama",
     "qwen",
+    "embeddinggemma",
+    "gemma",
+    "nomic-embed",
     "embeddings",
     "vector",
     "ai",
     "langchain",
     "vector-store",
-    "nlp"
+    "nlp",
+    "multi-model"
   ],
   "license": "MIT",
   "homepage": "https://github.com/theseedship/deposium_n8n_embeddings_integration",
