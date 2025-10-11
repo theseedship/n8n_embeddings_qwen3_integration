@@ -224,7 +224,7 @@ export class QwenEmbeddingTool implements INodeType {
 						},
 						displayOptions: {
 							show: {
-								performanceMode: ['custom'],
+								'/options/performanceMode': ['custom'],
 							},
 						},
 						hint: 'Recommended: GPU 30-60s, CPU 120s+',
@@ -242,7 +242,7 @@ export class QwenEmbeddingTool implements INodeType {
 						},
 						displayOptions: {
 							show: {
-								performanceMode: ['custom'],
+								'/options/performanceMode': ['custom'],
 							},
 						},
 					},
@@ -251,8 +251,9 @@ export class QwenEmbeddingTool implements INodeType {
 						name: 'compactFormat',
 						type: 'boolean',
 						default: false,
-						description: 'Whether to output embeddings as plain comma-separated text (easier to copy/paste)',
-						hint: 'Creates a plain text field with numbers separated by commas (no JSON formatting)',
+						description:
+							'Whether to output embeddings as plain semicolon-separated text (easier to copy/paste)',
+						hint: 'Creates a plain text field with numbers separated by semicolons to avoid n8n auto-formatting',
 					},
 					{
 						displayName: 'Context Prefix',
@@ -578,8 +579,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create plain comma-separated text (no JSON formatting)
-							outputItem.embeddingCompact = embeddings[0].join(',');
+							// Create plain semicolon-separated text (avoids n8n auto-formatting)
+							outputItem.embeddingCompact = embeddings[0].join(';');
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -589,8 +590,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create plain comma-separated text (no JSON formatting)
-							outputItem.vectorCompact = embeddings[0].join(',');
+							// Create plain semicolon-separated text (avoids n8n auto-formatting)
+							outputItem.vectorCompact = embeddings[0].join(';');
 						}
 					} else {
 						// Full response
@@ -602,8 +603,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create plain comma-separated text (no JSON formatting)
-							outputItem.embeddingCompact = embeddings[0].join(',');
+							// Create plain semicolon-separated text (avoids n8n auto-formatting)
+							outputItem.embeddingCompact = embeddings[0].join(';');
 						}
 
 						// Add optional metadata
@@ -630,8 +631,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// For batch, create one line per embedding with comma-separated values
-							outputItem.embeddingsCompact = embeddings.map(e => e.join(',')).join('\n');
+							// For batch, create one line per embedding with semicolon-separated values
+							outputItem.embeddingsCompact = embeddings.map((e) => e.join(';')).join('\n');
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -641,8 +642,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// For batch, create one line per embedding with comma-separated values
-							outputItem.vectorsCompact = embeddings.map(e => e.join(',')).join('\n');
+							// For batch, create one line per embedding with semicolon-separated values
+							outputItem.vectorsCompact = embeddings.map((e) => e.join(';')).join('\n');
 						}
 					} else {
 						// Full response
@@ -655,8 +656,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// For batch, create one line per embedding with comma-separated values
-							outputItem.embeddingsCompact = embeddings.map(e => e.join(',')).join('\n');
+							// For batch, create one line per embedding with semicolon-separated values
+							outputItem.embeddingsCompact = embeddings.map((e) => e.join(';')).join('\n');
 						}
 
 						// Add optional metadata
@@ -678,8 +679,8 @@ export class QwenEmbeddingTool implements INodeType {
 								embedding: embeddings[idx],
 							};
 							if (compactFormat) {
-								// Create plain comma-separated text (no JSON formatting)
-								item.embeddingCompact = embeddings[idx].join(',');
+								// Create plain semicolon-separated text (avoids n8n auto-formatting)
+								item.embeddingCompact = embeddings[idx].join(';');
 							}
 							return item;
 						});
