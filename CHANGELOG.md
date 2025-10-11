@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2025-10-12
+
+### 🔧 Critical Auto-Detection Fix
+
+**FIXED: Auto-detection was persisting across all embeddings causing timeout issues**
+
+### Fixed
+
+- **Auto-Detection Persistence Bug**: Auto-detected timeouts no longer persist across requests
+  - **Before**: First embedding's detected timeout applied to ALL subsequent embeddings
+  - **After**: Each batch uses its own auto-detected settings without affecting others
+  - Fixes issues when processing multiple texts or switching between models
+  - Prevents timeout errors on slower embeddings after fast ones
+
+- **Improved Detection Thresholds**: More realistic thresholds for each model family
+  - **EmbeddingGemma**: 100ms GPU / 500ms CPU (was 50/200)
+  - **Qwen**: 200ms GPU / 1s CPU (was 100/1000)
+  - Better handles real-world performance variations
+  - Reduces false GPU detections on fast CPUs
+
+### Technical Details
+
+**Before (buggy persistence):**
+```typescript
+// Modified class properties directly - affected ALL requests!
+requestTimeout = 10000;
+this.timeout = currentTimeout;
+```
+
+**After (isolated detection):**
+```typescript
+// Use local variables - only affects current batch
+let autoDetectedTimeout = 10000;
+let currentTimeout = autoDetectedTimeout || requestTimeout;
+```
+
+### Impact
+
+- Fixes random slowdowns with EmbeddingGemma
+- Prevents timeout errors when mixing models
+- Each n8n node execution starts fresh
+- Auto-detection now actually helps instead of causing problems
+
 ## [0.8.3] - 2025-10-12
 
 ### 🎯 Compact Format Finally Working!

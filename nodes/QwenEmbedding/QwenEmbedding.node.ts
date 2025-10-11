@@ -126,6 +126,10 @@ class QwenEmbeddings extends Embeddings {
 
 		const embeddings: number[][] = [];
 
+		// Store auto-detected settings for subsequent requests (don't modify class properties)
+		let autoDetectedTimeout: number | undefined;
+		let autoDetectedRetries: number | undefined;
+
 		// Ollama doesn't support batch embeddings, so we need to call it for each text
 		for (const text of texts) {
 			const requestBody = {
@@ -134,8 +138,9 @@ class QwenEmbeddings extends Embeddings {
 			};
 
 			let attemptCount = 0;
-			let currentTimeout = this.timeout;
-			let currentMaxRetries = this.maxRetries;
+			// Use auto-detected values if available, otherwise use original class values
+			let currentTimeout = autoDetectedTimeout || this.timeout;
+			let currentMaxRetries = autoDetectedRetries || this.maxRetries;
 
 			// Retry loop with auto-detection
 			while (attemptCount <= currentMaxRetries) {
@@ -162,35 +167,33 @@ class QwenEmbeddings extends Embeddings {
 						let cpuThreshold = 5000; // Default: >5s = CPU
 
 						if (capabilities.modelFamily === 'gemma') {
-							// Gemma is super fast, adjust thresholds
-							gpuThreshold = 50; // <50ms = definitely GPU
-							cpuThreshold = 200; // >200ms = likely CPU (though still fast)
+							// Gemma is very fast even on CPU, adjust thresholds
+							gpuThreshold = 100; // <100ms = likely GPU
+							cpuThreshold = 500; // >500ms = likely CPU
 						} else if (capabilities.modelFamily === 'qwen') {
 							// Qwen has moderate speeds
-							gpuThreshold = 100; // <100ms = GPU
+							gpuThreshold = 200; // <200ms = GPU
 							cpuThreshold = 1000; // >1s = CPU
 						}
 
 						if (duration < gpuThreshold) {
 							// Fast response - likely GPU
-							currentTimeout = 10000;
-							currentMaxRetries = 2;
-							this.timeout = currentTimeout;
-							this.maxRetries = currentMaxRetries;
+							autoDetectedTimeout = 10000;
+							autoDetectedRetries = 2;
 							console.log(
 								`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`,
 							);
 						} else if (duration > cpuThreshold) {
 							// Slow response - likely CPU
-							currentTimeout = 60000;
-							currentMaxRetries = 3;
-							this.timeout = currentTimeout;
-							this.maxRetries = currentMaxRetries;
+							autoDetectedTimeout = 60000;
+							autoDetectedRetries = 3;
 							console.log(
 								`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`,
 							);
 						} else {
 							// Medium speed - keep defaults
+							autoDetectedTimeout = this.timeout;
+							autoDetectedRetries = this.maxRetries;
 							console.log(`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`);
 						}
 					}
