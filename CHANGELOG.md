@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2025-10-12
+
+### 🎯 Compact Format Finally Working!
+
+**FIXED: Compact format now creates true single-line output**
+
+### Fixed
+
+- **Compact Format Output**: Now creates genuine single-line strings
+  - **Before**: Used `JSON.stringify()` which n8n could reformat with line breaks
+  - **After**: Uses `Array.join(',')` to create compact strings without any formatting
+  - Single embeddings: `[value1,value2,value3,...]` as one continuous string
+  - Batch embeddings: Array of compact strings, one per embedding
+  - No line breaks, no extra spaces - perfect for copy/paste
+
+### Technical Details
+
+**Before (still had line breaks):**
+```typescript
+outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+// n8n could reformat this with line breaks
+```
+
+**After (true single line):**
+```typescript
+outputItem.embeddingCompact = `[${embeddings[0].join(',')}]`;
+// Creates: [0.123,-0.456,0.789,...] as one continuous line
+```
+
 ## [0.8.2] - 2025-10-12
 
 ### 🔧 Critical Model Detection Fix

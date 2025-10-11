@@ -629,7 +629,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+							// Create a truly compact single-line string without spaces
+							outputItem.embeddingCompact = `[${embeddings[0].join(',')}]`;
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -639,7 +640,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.vectorCompact = JSON.stringify(embeddings[0]);
+							// Create a truly compact single-line string without spaces
+							outputItem.vectorCompact = `[${embeddings[0].join(',')}]`;
 						}
 					} else {
 						// Full response
@@ -651,7 +653,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+							// Create a truly compact single-line string without spaces
+							outputItem.embeddingCompact = `[${embeddings[0].join(',')}]`;
 						}
 
 						// Add optional metadata
@@ -678,7 +681,9 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingsCompact = embeddings.map((e) => JSON.stringify(e));
+							// For batch, create an array of compact strings (one per line for readability)
+							// Each embedding on its own line for easier copy/paste
+							outputItem.embeddingsCompact = embeddings.map((e) => `[${e.join(',')}]`);
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -688,7 +693,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.vectorsCompact = embeddings.map((e) => JSON.stringify(e));
+							// For batch vectors, create an array of compact strings
+							outputItem.vectorsCompact = embeddings.map((e) => `[${e.join(',')}]`);
 						}
 					} else {
 						// Full response
@@ -701,7 +707,9 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingsCompact = embeddings.map((e) => JSON.stringify(e));
+							// For batch, create an array of compact strings (one per line for readability)
+							// Each embedding on its own line for easier copy/paste
+							outputItem.embeddingsCompact = embeddings.map((e) => `[${e.join(',')}]`);
 						}
 
 						// Add optional metadata
@@ -723,7 +731,7 @@ export class QwenEmbeddingTool implements INodeType {
 								embedding: embeddings[idx],
 							};
 							if (compactFormat) {
-								item.embeddingCompact = JSON.stringify(embeddings[idx]);
+								item.embeddingCompact = `[${embeddings[idx].join(',')}]`;
 							}
 							return item;
 						});
