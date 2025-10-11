@@ -126,10 +126,6 @@ class QwenEmbeddings extends Embeddings {
 
 		const embeddings: number[][] = [];
 
-		// Store auto-detected settings for subsequent requests (don't modify class properties)
-		let autoDetectedTimeout: number | undefined;
-		let autoDetectedRetries: number | undefined;
-
 		// Ollama doesn't support batch embeddings, so we need to call it for each text
 		for (const text of texts) {
 			const requestBody = {
@@ -138,17 +134,13 @@ class QwenEmbeddings extends Embeddings {
 			};
 
 			let attemptCount = 0;
-			// Use auto-detected values if available, otherwise use original class values
-			let currentTimeout = autoDetectedTimeout || this.timeout;
-			let currentMaxRetries = autoDetectedRetries || this.maxRetries;
 
-			// Retry loop with auto-detection
-			while (attemptCount <= currentMaxRetries) {
+			// Retry loop
+			while (attemptCount <= this.maxRetries) {
 				const controller = new AbortController();
-				const timeoutId = setTimeout(() => controller.abort(), currentTimeout);
+				const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
 				try {
-					const requestStart = Date.now();
 					const response = await fetch(`${this.apiUrl}/api/embed`, {
 						method: 'POST',
 						headers,
@@ -156,47 +148,6 @@ class QwenEmbeddings extends Embeddings {
 						signal: controller.signal,
 					});
 					clearTimeout(timeoutId);
-
-					// Auto-detection on first successful request
-					if (this.performanceMode === 'auto' && embeddings.length === 0) {
-						const duration = Date.now() - requestStart;
-						const capabilities = getModelCapabilities(this.modelName);
-
-						// Different models have different baseline speeds
-						let gpuThreshold = 1000; // Default: <1s = GPU
-						let cpuThreshold = 5000; // Default: >5s = CPU
-
-						if (capabilities.modelFamily === 'gemma') {
-							// Gemma is very fast even on CPU, adjust thresholds
-							gpuThreshold = 100; // <100ms = likely GPU
-							cpuThreshold = 500; // >500ms = likely CPU
-						} else if (capabilities.modelFamily === 'qwen') {
-							// Qwen has moderate speeds
-							gpuThreshold = 200; // <200ms = GPU
-							cpuThreshold = 1000; // >1s = CPU
-						}
-
-						if (duration < gpuThreshold) {
-							// Fast response - likely GPU
-							autoDetectedTimeout = 30000;
-							autoDetectedRetries = 2;
-							console.log(
-								`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 30s.`,
-							);
-						} else if (duration > cpuThreshold) {
-							// Slow response - likely CPU
-							autoDetectedTimeout = 120000;
-							autoDetectedRetries = 3;
-							console.log(
-								`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 120s.`,
-							);
-						} else {
-							// Medium speed - keep defaults
-							autoDetectedTimeout = this.timeout;
-							autoDetectedRetries = this.maxRetries;
-							console.log(`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`);
-						}
-					}
 
 					if (!response.ok) {
 						const error = await response.text();
@@ -224,7 +175,7 @@ class QwenEmbeddings extends Embeddings {
 					attemptCount++;
 
 					// Retry logic with exponential backoff
-					if (attemptCount <= currentMaxRetries) {
+					if (attemptCount <= this.maxRetries) {
 						const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
 						// Retrying request with exponential backoff
 						await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -315,12 +266,28 @@ export class QwenEmbedding implements INodeType {
 				default: {},
 				options: [
 					{
-						displayName: 'Context Prefix',
-						name: 'prefix',
-						type: 'string',
-						default: '',
-						placeholder: 'e.g., "This document is about:"',
-						description: 'Optional prefix to prepend to the text for better semantic understanding',
+						displayName: 'Performance Mode',
+						name: 'performanceMode',
+						type: 'options',
+						default: 'gpu',
+						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
+						options: [
+							{
+								name: 'GPU Optimized',
+								value: 'gpu',
+								description: 'Fast inference with GPU: 30s timeout, 2 retries (recommended)',
+							},
+							{
+								name: 'CPU Optimized',
+								value: 'cpu',
+								description: 'Slower CPU inference: 120s timeout, 3 retries',
+							},
+							{
+								name: 'Custom',
+								value: 'custom',
+								description: 'Manually specify timeout and retry settings',
+							},
+						],
 					},
 					{
 						displayName: 'Custom Timeout (Ms)',
@@ -338,7 +305,32 @@ export class QwenEmbedding implements INodeType {
 								performanceMode: ['custom'],
 							},
 						},
-						hint: 'GPU: 5-10s, CPU: 30-60s recommended',
+						hint: 'Recommended: GPU 30-60s, CPU 120s+',
+					},
+					{
+						displayName: 'Max Retries',
+						name: 'maxRetries',
+						type: 'number',
+						default: 2,
+						description: 'Maximum number of retry attempts on failure',
+						typeOptions: {
+							minValue: 0,
+							maxValue: 5,
+							numberStepSize: 1,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
+					},
+					{
+						displayName: 'Context Prefix',
+						name: 'prefix',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g., "This document is about:"',
+						description: 'Optional prefix to prepend to the text for better semantic understanding',
 					},
 					{
 						displayName: 'Dimensions',
@@ -375,52 +367,6 @@ export class QwenEmbedding implements INodeType {
 								name: 'Document',
 								value: 'document',
 								description: 'For documents being indexed',
-							},
-						],
-					},
-					{
-						displayName: 'Max Retries',
-						name: 'maxRetries',
-						type: 'number',
-						default: 2,
-						description: 'Maximum number of retry attempts on failure',
-						typeOptions: {
-							minValue: 0,
-							maxValue: 5,
-							numberStepSize: 1,
-						},
-						displayOptions: {
-							show: {
-								performanceMode: ['custom'],
-							},
-						},
-					},
-					{
-						displayName: 'Performance Mode',
-						name: 'performanceMode',
-						type: 'options',
-						default: 'gpu',
-						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
-						options: [
-							{
-								name: 'GPU Optimized',
-								value: 'gpu',
-								description: 'Fast inference with GPU: 30s timeout, 2 retries (recommended)',
-							},
-							{
-								name: 'CPU Optimized',
-								value: 'cpu',
-								description: 'Slower CPU inference: 120s timeout, 3 retries',
-							},
-							{
-								name: 'Auto-Detect',
-								value: 'auto',
-								description: 'Auto-detect GPU/CPU (unreliable, not recommended)',
-							},
-							{
-								name: 'Custom',
-								value: 'custom',
-								description: 'Manually specify timeout and retry settings',
 							},
 						],
 					},
@@ -476,7 +422,6 @@ export class QwenEmbedding implements INodeType {
 					requestTimeout = options.customTimeout || 30000;
 					maxRetries = options.maxRetries || 2;
 					break;
-				case 'auto':
 				default:
 					requestTimeout = 30000; // 30 seconds default
 					maxRetries = 2;

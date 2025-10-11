@@ -188,20 +188,28 @@ export class QwenEmbeddingTool implements INodeType {
 				default: {},
 				options: [
 					{
-						displayName: 'Compact Format',
-						name: 'compactFormat',
-						type: 'boolean',
-						default: false,
-						description: 'Whether to format embeddings in a single line (easier to copy/paste)',
-						hint: 'When enabled, embeddings are output as a single line instead of multi-line JSON',
-					},
-					{
-						displayName: 'Context Prefix',
-						name: 'prefix',
-						type: 'string',
-						default: '',
-						placeholder: 'e.g., "This document is about:"',
-						description: 'Optional prefix to prepend to the text for better semantic understanding',
+						displayName: 'Performance Mode',
+						name: 'performanceMode',
+						type: 'options',
+						default: 'gpu',
+						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
+						options: [
+							{
+								name: 'GPU Optimized',
+								value: 'gpu',
+								description: 'Fast inference with GPU: 30s timeout, 2 retries (recommended)',
+							},
+							{
+								name: 'CPU Optimized',
+								value: 'cpu',
+								description: 'Slower CPU inference: 120s timeout, 3 retries',
+							},
+							{
+								name: 'Custom',
+								value: 'custom',
+								description: 'Manually specify timeout and retry settings',
+							},
+						],
 					},
 					{
 						displayName: 'Custom Timeout (Ms)',
@@ -219,7 +227,40 @@ export class QwenEmbeddingTool implements INodeType {
 								performanceMode: ['custom'],
 							},
 						},
-						hint: 'GPU: 5-10s, CPU: 30-60s recommended',
+						hint: 'Recommended: GPU 30-60s, CPU 120s+',
+					},
+					{
+						displayName: 'Max Retries',
+						name: 'maxRetries',
+						type: 'number',
+						default: 2,
+						description: 'Maximum number of retry attempts on failure',
+						typeOptions: {
+							minValue: 0,
+							maxValue: 5,
+							numberStepSize: 1,
+						},
+						displayOptions: {
+							show: {
+								performanceMode: ['custom'],
+							},
+						},
+					},
+					{
+						displayName: 'Compact Format',
+						name: 'compactFormat',
+						type: 'boolean',
+						default: false,
+						description: 'Whether to output embeddings as plain comma-separated text (easier to copy/paste)',
+						hint: 'Creates a plain text field with numbers separated by commas (no JSON formatting)',
+					},
+					{
+						displayName: 'Context Prefix',
+						name: 'prefix',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g., "This document is about:"',
+						description: 'Optional prefix to prepend to the text for better semantic understanding',
 					},
 					{
 						displayName: 'Dimensions',
@@ -263,52 +304,6 @@ export class QwenEmbeddingTool implements INodeType {
 								name: 'Document',
 								value: 'document',
 								description: 'For documents being indexed',
-							},
-						],
-					},
-					{
-						displayName: 'Max Retries',
-						name: 'maxRetries',
-						type: 'number',
-						default: 2,
-						description: 'Maximum number of retry attempts on failure',
-						typeOptions: {
-							minValue: 0,
-							maxValue: 5,
-							numberStepSize: 1,
-						},
-						displayOptions: {
-							show: {
-								performanceMode: ['custom'],
-							},
-						},
-					},
-					{
-						displayName: 'Performance Mode',
-						name: 'performanceMode',
-						type: 'options',
-						default: 'gpu',
-						description: 'Optimize timeouts and retries based on your Ollama hardware setup',
-						options: [
-							{
-								name: 'GPU Optimized',
-								value: 'gpu',
-								description: 'Fast inference with GPU: 30s timeout, 2 retries (recommended)',
-							},
-							{
-								name: 'CPU Optimized',
-								value: 'cpu',
-								description: 'Slower CPU inference: 120s timeout, 3 retries',
-							},
-							{
-								name: 'Auto-Detect',
-								value: 'auto',
-								description: 'Auto-detect GPU/CPU (unreliable, not recommended)',
-							},
-							{
-								name: 'Custom',
-								value: 'custom',
-								description: 'Manually specify timeout and retry settings',
 							},
 						],
 					},
@@ -384,7 +379,6 @@ export class QwenEmbeddingTool implements INodeType {
 						requestTimeout = options.customTimeout || 30000;
 						maxRetries = options.maxRetries || 2;
 						break;
-					case 'auto':
 					default:
 						requestTimeout = 30000; // 30 seconds default
 						maxRetries = 2;
@@ -453,10 +447,6 @@ export class QwenEmbeddingTool implements INodeType {
 				// Ollama doesn't support batch embeddings, so we need to call it for each text
 				const embeddings: number[][] = [];
 
-				// Store auto-detected settings (if any) for subsequent requests
-				let autoDetectedTimeout: number | undefined;
-				let autoDetectedRetries: number | undefined;
-
 				for (const text of texts) {
 					// Prepare request body for Ollama
 					const requestBody = {
@@ -469,21 +459,15 @@ export class QwenEmbeddingTool implements INodeType {
 					let response: any;
 					let attemptCount = 0;
 
-					// Use auto-detected settings if available, otherwise use original settings
-					let currentTimeout = autoDetectedTimeout || requestTimeout;
-					let currentRetries = autoDetectedRetries || maxRetries;
-
-					// Retry loop with auto-detection
-					while (attemptCount <= currentRetries) {
+					// Retry loop
+					while (attemptCount <= maxRetries) {
 						try {
-							const requestStart = Date.now();
-
 							// Use native fetch API to avoid N8N helper POST→GET transformation
 							const fetchResponse = await fetch(`${apiUrl}/api/embed`, {
 								method: 'POST',
 								headers: { 'Content-Type': 'application/json' },
 								body: JSON.stringify(requestBody),
-								signal: AbortSignal.timeout(currentTimeout),
+								signal: AbortSignal.timeout(requestTimeout),
 							});
 
 							if (!fetchResponse.ok) {
@@ -495,51 +479,6 @@ export class QwenEmbeddingTool implements INodeType {
 							}
 
 							response = await fetchResponse.json();
-
-							// Auto-detection on first successful request
-							if (performanceMode === 'auto' && embeddings.length === 0) {
-								const duration = Date.now() - requestStart;
-								const capabilities = getModelCapabilities(modelName);
-
-								// Different models have different baseline speeds
-								// EmbeddingGemma is extremely fast even on CPU (~90ms)
-								// Qwen is moderately fast on GPU (~150ms)
-								let gpuThreshold = 1000; // Default: <1s = GPU
-								let cpuThreshold = 5000; // Default: >5s = CPU
-
-								if (capabilities.modelFamily === 'gemma') {
-									// Gemma is very fast even on CPU, adjust thresholds
-									gpuThreshold = 100; // <100ms = likely GPU
-									cpuThreshold = 500; // >500ms = likely CPU
-								} else if (capabilities.modelFamily === 'qwen') {
-									// Qwen has moderate speeds
-									gpuThreshold = 200; // <200ms = GPU
-									cpuThreshold = 1000; // >1s = CPU
-								}
-
-								if (duration < gpuThreshold) {
-									// Fast response - likely GPU
-									autoDetectedTimeout = 30000;
-									autoDetectedRetries = 2;
-									console.log(
-										`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 30s.`,
-									);
-								} else if (duration > cpuThreshold) {
-									// Slow response - likely CPU
-									autoDetectedTimeout = 120000;
-									autoDetectedRetries = 3;
-									console.log(
-										`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 120s.`,
-									);
-								} else {
-									// Medium speed - keep defaults
-									autoDetectedTimeout = requestTimeout;
-									autoDetectedRetries = maxRetries;
-									console.log(
-										`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`,
-									);
-								}
-							}
 
 							break; // Success - exit retry loop
 						} catch (error: any) {
@@ -562,7 +501,7 @@ export class QwenEmbeddingTool implements INodeType {
 							}
 
 							// Retry logic with exponential backoff
-							if (attemptCount <= currentRetries) {
+							if (attemptCount <= maxRetries) {
 								const waitTime = Math.min(1000 * Math.pow(2, attemptCount - 1), 5000);
 								// Retrying request with exponential backoff
 								await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -570,7 +509,7 @@ export class QwenEmbeddingTool implements INodeType {
 								// Max retries reached
 								throw new NodeOperationError(
 									this.getNode(),
-									`Failed after ${currentRetries} retries: ${error.message}`,
+									`Failed after ${maxRetries} retries: ${error.message}`,
 									{ itemIndex },
 								);
 							}
@@ -639,8 +578,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create a truly compact single-line string without spaces
-							outputItem.embeddingCompact = `[${embeddings[0].join(',')}]`;
+							// Create plain comma-separated text (no JSON formatting)
+							outputItem.embeddingCompact = embeddings[0].join(',');
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -650,8 +589,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create a truly compact single-line string without spaces
-							outputItem.vectorCompact = `[${embeddings[0].join(',')}]`;
+							// Create plain comma-separated text (no JSON formatting)
+							outputItem.vectorCompact = embeddings[0].join(',');
 						}
 					} else {
 						// Full response
@@ -663,8 +602,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create a truly compact single-line string without spaces
-							outputItem.embeddingCompact = `[${embeddings[0].join(',')}]`;
+							// Create plain comma-separated text (no JSON formatting)
+							outputItem.embeddingCompact = embeddings[0].join(',');
 						}
 
 						// Add optional metadata
@@ -691,10 +630,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// For batch, create an array of compact strings (one per line for readability)
-							// Each embedding on its own line for easier copy/paste
-							// Create a single JSON string for true single-line output
-							outputItem.embeddingsCompact = JSON.stringify(embeddings).replace(/\s+/g, '');
+							// For batch, create one line per embedding with comma-separated values
+							outputItem.embeddingsCompact = embeddings.map(e => e.join(',')).join('\n');
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -704,8 +641,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// Create a single JSON string for true single-line output
-							outputItem.vectorsCompact = JSON.stringify(embeddings).replace(/\s+/g, '');
+							// For batch, create one line per embedding with comma-separated values
+							outputItem.vectorsCompact = embeddings.map(e => e.join(',')).join('\n');
 						}
 					} else {
 						// Full response
@@ -718,10 +655,8 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							// For batch, create an array of compact strings (one per line for readability)
-							// Each embedding on its own line for easier copy/paste
-							// Create a single JSON string for true single-line output
-							outputItem.embeddingsCompact = JSON.stringify(embeddings).replace(/\s+/g, '');
+							// For batch, create one line per embedding with comma-separated values
+							outputItem.embeddingsCompact = embeddings.map(e => e.join(',')).join('\n');
 						}
 
 						// Add optional metadata
@@ -743,7 +678,8 @@ export class QwenEmbeddingTool implements INodeType {
 								embedding: embeddings[idx],
 							};
 							if (compactFormat) {
-								item.embeddingCompact = `[${embeddings[idx].join(',')}]`;
+								// Create plain comma-separated text (no JSON formatting)
+								item.embeddingCompact = embeddings[idx].join(',');
 							}
 							return item;
 						});
