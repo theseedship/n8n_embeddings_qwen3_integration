@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2025-10-11
+
+### 🐛 Bug Fixes
+
+Critical fixes for multi-model support introduced in v0.8.0.
+
+### Fixed
+
+- **Compact Format Output**: Fixed compact format returning string instead of array
+  - Added separate `embeddingCompact` field to preserve array type
+  - Original `embedding` field remains unchanged (array)
+  - Compact string format available in new field for easy copy/paste
+  - Fixes type compatibility issues in downstream nodes
+
+- **Model-Specific Auto-Detection**: Improved GPU/CPU detection per model family
+  - **EmbeddingGemma**: Ultra-fast thresholds (50ms GPU / 200ms CPU)
+  - **Qwen**: Standard thresholds (100ms GPU / 1000ms CPU)
+  - **Default**: Conservative thresholds (1000ms GPU / 5000ms CPU)
+  - Prevents false GPU detection for naturally fast models like Gemma
+
+- **Model Name Clarity**: Updated placeholder text and hints
+  - Now explicitly states: "Enter exact model name as shown in 'ollama list'"
+  - Helps users understand quantized model names (e.g., embeddinggemma:300m-Q4_K_M)
+  - Prevents confusion with base model names
+
+### Technical Details
+
+**Compact Format Fix (QwenEmbeddingTool):**
+```typescript
+// Before: Replaced array with string (broke type)
+if (compactFormat) {
+    outputItem.embedding = JSON.stringify(embeddings[0]);
+}
+
+// After: Keep array, add separate field
+if (compactFormat) {
+    outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+}
+```
+
+**Auto-Detection Improvements (QwenEmbedding):**
+```typescript
+// Model-specific thresholds
+if (capabilities.modelFamily === 'gemma') {
+    gpuThreshold = 50;   // Gemma is exceptionally fast
+    cpuThreshold = 200;
+} else if (capabilities.modelFamily === 'qwen') {
+    gpuThreshold = 100;  // Qwen moderate speed
+    cpuThreshold = 1000;
+}
+```
+
 ## [0.8.0] - 2025-10-11
 
 ### 🚀 Multi-Model Support Release

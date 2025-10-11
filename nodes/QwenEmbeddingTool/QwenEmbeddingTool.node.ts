@@ -109,11 +109,11 @@ export class QwenEmbeddingTool implements INodeType {
 				name: 'modelName',
 				type: 'string',
 				default: 'qwen3-embedding:0.6b',
-				placeholder: 'e.g., qwen3-embedding:0.6b, embeddinggemma:300m, nomic-embed-text',
+				placeholder: 'Enter exact model name as shown in "ollama list"',
 				description:
-					'The Ollama embedding model to use (must be pulled in Ollama first). Supports Qwen, EmbeddingGemma, Nomic and more.',
+					'The Ollama embedding model to use (must be pulled in Ollama first). Enter the EXACT name from "ollama list" command.',
 				required: true,
-				hint: 'Supported models: qwen3-embedding (1024d), embeddinggemma (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
+				hint: 'Common models: qwen3-embedding:0.6b (1024d), embeddinggemma:300m-Q4_K_M (768d), nomic-embed-text:v1.5 (768d), snowflake-arctic-embed:110m (1024d)',
 			},
 			{
 				displayName: 'Operation',
@@ -478,16 +478,37 @@ export class QwenEmbeddingTool implements INodeType {
 							// Auto-detection on first successful request
 							if (performanceMode === 'auto' && embeddings.length === 0) {
 								const duration = Date.now() - requestStart;
-								if (duration < 1000) {
+								const capabilities = getModelCapabilities(modelName);
+
+								// Different models have different baseline speeds
+								// EmbeddingGemma is extremely fast even on CPU (~90ms)
+								// Qwen is moderately fast on GPU (~150ms)
+								let gpuThreshold = 1000; // Default: <1s = GPU
+								let cpuThreshold = 5000; // Default: >5s = CPU
+
+								if (capabilities.modelFamily === 'gemma') {
+									// Gemma is super fast, adjust thresholds
+									gpuThreshold = 50;   // <50ms = definitely GPU
+									cpuThreshold = 200;  // >200ms = likely CPU (though still fast)
+								} else if (capabilities.modelFamily === 'qwen') {
+									// Qwen has moderate speeds
+									gpuThreshold = 100;  // <100ms = GPU
+									cpuThreshold = 1000; // >1s = CPU
+								}
+
+								if (duration < gpuThreshold) {
 									// Fast response - likely GPU
 									requestTimeout = 10000;
 									maxRetries = 2;
-									// Auto-detection: GPU mode activated (timeout: 10s)
-								} else if (duration > 5000) {
+									console.log(`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`);
+								} else if (duration > cpuThreshold) {
 									// Slow response - likely CPU
 									requestTimeout = 60000;
 									maxRetries = 3;
-									// Auto-detection: CPU mode activated (timeout: 60s)
+									console.log(`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`);
+								} else {
+									// Medium speed - keep defaults
+									console.log(`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`);
 								}
 							}
 
@@ -579,37 +600,40 @@ export class QwenEmbeddingTool implements INodeType {
 				const returnFormat = options.returnFormat || 'full';
 				const compactFormat = options.compactFormat || false;
 
-				// Helper function to format embedding array
-				const formatEmbedding = (embedding: number[]) => {
-					if (compactFormat) {
-						// Return as a single-line string for easy copy/paste
-						return JSON.stringify(embedding);
-					}
-					return embedding;
-				};
-
 				if (operation === 'generateEmbedding') {
 					// Single embedding response
 					let outputItem: any;
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embedding: formatEmbedding(embeddings[0]),
+							embedding: embeddings[0],
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							text: texts[0],
-							vector: formatEmbedding(embeddings[0]),
+							vector: embeddings[0],
 							dimensions: embeddings[0].length,
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.vectorCompact = JSON.stringify(embeddings[0]);
+						}
 					} else {
 						// Full response
 						outputItem = {
-							embedding: formatEmbedding(embeddings[0]),
+							embedding: embeddings[0],
 							dimensions: embeddings[0].length,
 							text: texts[0],
 							model: modelName,
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.embeddingCompact = JSON.stringify(embeddings[0]);
+						}
 
 						// Add optional metadata
 						if (options.includeMetadata) {
@@ -631,23 +655,35 @@ export class QwenEmbeddingTool implements INodeType {
 
 					if (returnFormat === 'embedding') {
 						outputItem = {
-							embeddings: embeddings.map(formatEmbedding),
+							embeddings: embeddings,
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.embeddingsCompact = embeddings.map(e => JSON.stringify(e));
+						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
 							count: texts.length,
-							vectors: embeddings.map(formatEmbedding),
+							vectors: embeddings,
 							dimensions: embeddings[0] ? embeddings[0].length : 0,
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.vectorsCompact = embeddings.map(e => JSON.stringify(e));
+						}
 					} else {
 						// Full response
 						outputItem = {
-							embeddings: embeddings.map(formatEmbedding),
+							embeddings: embeddings,
 							texts: texts,
 							count: texts.length,
 							dimensions: embeddings[0] ? embeddings[0].length : 0,
 							model: modelName,
 						};
+						// Add compact format as separate field if requested
+						if (compactFormat) {
+							outputItem.embeddingsCompact = embeddings.map(e => JSON.stringify(e));
+						}
 
 						// Add optional metadata
 						if (options.includeMetadata) {
@@ -662,10 +698,16 @@ export class QwenEmbeddingTool implements INodeType {
 
 					// Also add individual items if needed for further processing
 					if (returnFormat === 'full' && texts.length === embeddings.length) {
-						outputItem.items = texts.map((text, idx) => ({
-							text: text,
-							embedding: formatEmbedding(embeddings[idx]),
-						}));
+						outputItem.items = texts.map((text, idx) => {
+							const item: any = {
+								text: text,
+								embedding: embeddings[idx],
+							};
+							if (compactFormat) {
+								item.embeddingCompact = JSON.stringify(embeddings[idx]);
+							}
+							return item;
+						});
 					}
 
 					returnData.push({

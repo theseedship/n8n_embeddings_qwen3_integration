@@ -142,20 +142,39 @@ class QwenEmbeddings extends Embeddings {
 					// Auto-detection on first successful request
 					if (this.performanceMode === 'auto' && embeddings.length === 0) {
 						const duration = Date.now() - requestStart;
-						if (duration < 1000) {
+						const capabilities = getModelCapabilities(this.modelName);
+
+						// Different models have different baseline speeds
+						let gpuThreshold = 1000; // Default: <1s = GPU
+						let cpuThreshold = 5000; // Default: >5s = CPU
+
+						if (capabilities.modelFamily === 'gemma') {
+							// Gemma is super fast, adjust thresholds
+							gpuThreshold = 50;   // <50ms = definitely GPU
+							cpuThreshold = 200;  // >200ms = likely CPU (though still fast)
+						} else if (capabilities.modelFamily === 'qwen') {
+							// Qwen has moderate speeds
+							gpuThreshold = 100;  // <100ms = GPU
+							cpuThreshold = 1000; // >1s = CPU
+						}
+
+						if (duration < gpuThreshold) {
 							// Fast response - likely GPU
 							currentTimeout = 10000;
 							currentMaxRetries = 2;
 							this.timeout = currentTimeout;
 							this.maxRetries = currentMaxRetries;
-							// Auto-detection: GPU mode activated (timeout: 10s)
-						} else if (duration > 5000) {
+							console.log(`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`);
+						} else if (duration > cpuThreshold) {
 							// Slow response - likely CPU
 							currentTimeout = 60000;
 							currentMaxRetries = 3;
 							this.timeout = currentTimeout;
 							this.maxRetries = currentMaxRetries;
-							// Auto-detection: CPU mode activated (timeout: 60s)
+							console.log(`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`);
+						} else {
+							// Medium speed - keep defaults
+							console.log(`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`);
 						}
 					}
 
@@ -262,11 +281,11 @@ export class QwenEmbedding implements INodeType {
 				name: 'modelName',
 				type: 'string',
 				default: 'qwen3-embedding:0.6b',
-				placeholder: 'e.g., qwen3-embedding:0.6b, embeddinggemma:300m, nomic-embed-text',
+				placeholder: 'Enter exact model name as shown in "ollama list"',
 				description:
-					'The Ollama embedding model to use (must be pulled in Ollama first). Supports Qwen, EmbeddingGemma, Nomic and more.',
+					'The Ollama embedding model to use (must be pulled in Ollama first). Enter the EXACT name from "ollama list" command.',
 				required: true,
-				hint: 'Supported models: qwen3-embedding (1024d), embeddinggemma (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
+				hint: 'Common models: qwen3-embedding:0.6b (1024d), embeddinggemma:300m-Q4_K_M (768d), nomic-embed-text:v1.5 (768d), snowflake-arctic-embed:110m (1024d)',
 			},
 			{
 				displayName: 'Options',
