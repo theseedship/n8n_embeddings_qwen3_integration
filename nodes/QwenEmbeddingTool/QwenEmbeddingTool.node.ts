@@ -18,8 +18,9 @@ interface ModelCapabilities {
 function getModelCapabilities(modelName: string): ModelCapabilities {
 	const lowerModel = modelName.toLowerCase();
 
-	// EmbeddingGemma models
-	if (lowerModel.includes('embeddinggemma') || lowerModel.includes('embedding-gemma')) {
+	// EmbeddingGemma models - check for 'gemma' anywhere in the name
+	// Examples: embeddinggemma:300m, embeddinggemma:300m-Q4_K_M, gemma:2b
+	if (lowerModel.includes('gemma')) {
 		return {
 			maxDimensions: 768,
 			maxTokens: 2048,
@@ -30,7 +31,7 @@ function getModelCapabilities(modelName: string): ModelCapabilities {
 	}
 
 	// Nomic Embed models
-	if (lowerModel.includes('nomic-embed')) {
+	if (lowerModel.includes('nomic')) {
 		return {
 			maxDimensions: 768,
 			maxTokens: 8192,
@@ -41,7 +42,7 @@ function getModelCapabilities(modelName: string): ModelCapabilities {
 	}
 
 	// Snowflake Arctic Embed models
-	if (lowerModel.includes('snowflake-arctic-embed')) {
+	if (lowerModel.includes('snowflake') || lowerModel.includes('arctic')) {
 		return {
 			maxDimensions: 1024,
 			maxTokens: 512,
@@ -51,13 +52,25 @@ function getModelCapabilities(modelName: string): ModelCapabilities {
 		};
 	}
 
-	// Default to Qwen capabilities (most flexible)
+	// Qwen models - check for 'qwen' in the name
+	// Examples: qwen3-embedding:0.6b, qwen2.5-coder:1.5b
+	if (lowerModel.includes('qwen')) {
+		return {
+			maxDimensions: 1024,
+			maxTokens: 32768, // 32K context for Qwen3
+			defaultDimensions: 1024,
+			supportsInstructions: true,
+			modelFamily: 'qwen',
+		};
+	}
+
+	// Default fallback (assume generic model with conservative limits)
 	return {
 		maxDimensions: 1024,
-		maxTokens: 32768, // 32K context for Qwen3
-		defaultDimensions: 1024,
+		maxTokens: 8192,
+		defaultDimensions: 768,
 		supportsInstructions: true,
-		modelFamily: 'qwen',
+		modelFamily: 'generic',
 	};
 }
 
@@ -113,7 +126,7 @@ export class QwenEmbeddingTool implements INodeType {
 				description:
 					'The Ollama embedding model to use (must be pulled in Ollama first). Enter the EXACT name from "ollama list" command.',
 				required: true,
-				hint: 'Common models: qwen3-embedding:0.6b (1024d), embeddinggemma:300m-Q4_K_M (768d), nomic-embed-text:v1.5 (768d), snowflake-arctic-embed:110m (1024d)',
+				hint: 'Common models: qwen3-embedding:0.6b (1024d), embeddinggemma:300m (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
 			},
 			{
 				displayName: 'Operation',
@@ -488,11 +501,11 @@ export class QwenEmbeddingTool implements INodeType {
 
 								if (capabilities.modelFamily === 'gemma') {
 									// Gemma is super fast, adjust thresholds
-									gpuThreshold = 50;   // <50ms = definitely GPU
-									cpuThreshold = 200;  // >200ms = likely CPU (though still fast)
+									gpuThreshold = 50; // <50ms = definitely GPU
+									cpuThreshold = 200; // >200ms = likely CPU (though still fast)
 								} else if (capabilities.modelFamily === 'qwen') {
 									// Qwen has moderate speeds
-									gpuThreshold = 100;  // <100ms = GPU
+									gpuThreshold = 100; // <100ms = GPU
 									cpuThreshold = 1000; // >1s = CPU
 								}
 
@@ -500,15 +513,21 @@ export class QwenEmbeddingTool implements INodeType {
 									// Fast response - likely GPU
 									requestTimeout = 10000;
 									maxRetries = 2;
-									console.log(`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`);
+									console.log(
+										`[Auto-detect] GPU detected (${duration}ms < ${gpuThreshold}ms). Adjusted timeout to 10s.`,
+									);
 								} else if (duration > cpuThreshold) {
 									// Slow response - likely CPU
 									requestTimeout = 60000;
 									maxRetries = 3;
-									console.log(`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`);
+									console.log(
+										`[Auto-detect] CPU detected (${duration}ms > ${cpuThreshold}ms). Adjusted timeout to 60s.`,
+									);
 								} else {
 									// Medium speed - keep defaults
-									console.log(`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`);
+									console.log(
+										`[Auto-detect] Moderate speed (${duration}ms). Keeping default timeout.`,
+									);
 								}
 							}
 
@@ -659,7 +678,7 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingsCompact = embeddings.map(e => JSON.stringify(e));
+							outputItem.embeddingsCompact = embeddings.map((e) => JSON.stringify(e));
 						}
 					} else if (returnFormat === 'simplified') {
 						outputItem = {
@@ -669,7 +688,7 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.vectorsCompact = embeddings.map(e => JSON.stringify(e));
+							outputItem.vectorsCompact = embeddings.map((e) => JSON.stringify(e));
 						}
 					} else {
 						// Full response
@@ -682,7 +701,7 @@ export class QwenEmbeddingTool implements INodeType {
 						};
 						// Add compact format as separate field if requested
 						if (compactFormat) {
-							outputItem.embeddingsCompact = embeddings.map(e => JSON.stringify(e));
+							outputItem.embeddingsCompact = embeddings.map((e) => JSON.stringify(e));
 						}
 
 						// Add optional metadata

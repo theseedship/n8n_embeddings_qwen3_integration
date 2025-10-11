@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2025-10-12
+
+### 🔧 Critical Model Detection Fix
+
+**FIXED: Models were not being detected correctly**
+
+### Fixed
+
+- **Model Detection Logic**: Simplified and fixed model family detection
+  - **Before**: Only detected exact strings like "embeddinggemma" or "nomic-embed"
+  - **After**: Now properly detects any model containing "gemma", "qwen", "nomic", etc.
+  - Examples that now work correctly:
+    - `qwen3-embedding:0.6b` → Qwen family (1024d, 32K context)
+    - `embeddinggemma:300m` → Gemma family (768d, 2K context)
+    - `gemma:2b` → Gemma family
+    - `qwen2.5-coder:1.5b` → Qwen family
+
+- **Model Name Examples**: Updated hints to show actual Ollama model names
+  - Removed non-existent variants like `:300m-Q4_K_M` or `:v1.5`
+  - Now shows exact names as they appear in `ollama list`
+
+- **Fallback Handling**: Added "generic" family for unknown models
+  - Conservative defaults: 768d default, 1024d max, 8K context
+  - Prevents crashes with new or custom models
+
+### Technical Details
+
+**Before (broken detection):**
+```typescript
+// Only matched exact patterns
+if (lowerModel.includes('embeddinggemma')) // Missed "gemma:2b"
+if (lowerModel.includes('nomic-embed'))     // Missed "nomic-text"
+// No explicit Qwen detection - fell through to default
+```
+
+**After (fixed detection):**
+```typescript
+if (lowerModel.includes('gemma'))    // Catches all Gemma variants
+if (lowerModel.includes('qwen'))     // Explicitly detects Qwen models
+if (lowerModel.includes('nomic'))    // Catches all Nomic variants
+// Proper fallback for unknown models
+```
+
 ## [0.8.1] - 2025-10-11
 
 ### 🐛 Bug Fixes
