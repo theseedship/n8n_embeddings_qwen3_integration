@@ -41,6 +41,9 @@ research_*.md
 *.research.md
 docs/drafts/
 
+# Internal/private documentation
+docs-interne/
+
 # Temporary files
 *.tmp
 *.temp

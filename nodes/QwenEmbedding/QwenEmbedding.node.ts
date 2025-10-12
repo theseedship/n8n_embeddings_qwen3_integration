@@ -302,7 +302,7 @@ export class QwenEmbedding implements INodeType {
 						},
 						displayOptions: {
 							show: {
-								'performanceMode': ['custom'],
+								performanceMode: ['custom'],
 							},
 						},
 						hint: 'Recommended: GPU 30-60s, CPU 120s+',
@@ -320,7 +320,7 @@ export class QwenEmbedding implements INodeType {
 						},
 						displayOptions: {
 							show: {
-								'performanceMode': ['custom'],
+								performanceMode: ['custom'],
 							},
 						},
 					},
