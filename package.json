@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-qwen-embedding",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "description": "n8n nodes for Ollama embeddings - Support for Qwen, EmbeddingGemma, Nomic and more. Generate text embeddings for vector stores and AI applications.",
   "keywords": [
     "n8n-community-node-package",
