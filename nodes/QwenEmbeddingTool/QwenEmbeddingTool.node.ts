@@ -116,17 +116,51 @@ export class QwenEmbeddingTool implements INodeType {
 				required: false, // Optional - not needed for self-hosted Ollama without auth
 			},
 		],
+		requestDefaults: {
+			ignoreHttpStatusErrors: true,
+			baseURL: '={{ $credentials.baseUrl.replace(new RegExp("/$"), "") }}',
+		},
 		properties: [
 			{
-				displayName: 'Model Name',
+				displayName: 'Model',
 				name: 'modelName',
-				type: 'string',
-				default: 'qwen3-embedding:0.6b',
-				placeholder: 'Enter exact model name as shown in "ollama list"',
-				description:
-					'The Ollama embedding model to use (must be pulled in Ollama first). Enter the EXACT name from "ollama list" command.',
+				type: 'options',
+				default: '',
+				description: 'The embedding model to use - models are loaded from your configured Ollama/Custom API',
+				typeOptions: {
+					loadOptions: {
+						routing: {
+							request: {
+								method: 'GET',
+								url: '/api/tags',
+							},
+							output: {
+								postReceive: [
+									{
+										type: 'rootProperty',
+										properties: {
+											property: 'models',
+										},
+									},
+									{
+										type: 'setKeyValue',
+										properties: {
+											name: '={{$responseItem.name}}',
+											value: '={{$responseItem.name}}',
+										},
+									},
+									{
+										type: 'sort',
+										properties: {
+											key: 'name',
+										},
+									},
+								],
+							},
+						},
+					},
+				},
 				required: true,
-				hint: 'Common models: qwen3-embedding:0.6b (1024d), embeddinggemma:300m (768d), nomic-embed-text (768d), snowflake-arctic-embed (1024d)',
 			},
 			{
 				displayName: 'Operation',
