@@ -48,7 +48,8 @@ docs-interne/
 *.tmp
 *.temp
 
-# Docker data volumes
+# Docker
+Dockerfile*
 data/
 
 # Ignore packaged n8n node

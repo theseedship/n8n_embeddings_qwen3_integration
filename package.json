@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-qwen-embedding",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "n8n nodes for Ollama embeddings - Dynamic model loading + Support for Qwen, EmbeddingGemma, Nomic and more. Generate text embeddings for vector stores and AI applications.",
   "keywords": [
     "n8n-community-node-package",
