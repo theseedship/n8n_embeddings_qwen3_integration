@@ -53,3 +53,4 @@ data/
 
 # Ignore packaged n8n node
 *.tgz
+.gitnexus
