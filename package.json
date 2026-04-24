@@ -73,7 +73,7 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "@langchain/core": "^0.3.80"
+    "@langchain/core": "^1.1.41"
   },
   "overrides": {
     "form-data": "^4.0.4",
