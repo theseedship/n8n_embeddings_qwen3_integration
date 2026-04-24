@@ -256,7 +256,8 @@ export class QwenEmbedding implements INodeType {
 				name: 'modelName',
 				type: 'options',
 				default: '',
-				description: 'The embedding model to use - models are loaded from your configured Ollama/Custom API',
+				description:
+					'The embedding model to use - models are loaded from your configured Ollama/Custom API',
 				typeOptions: {
 					loadOptions: {
 						routing: {
