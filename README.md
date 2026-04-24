@@ -1,7 +1,7 @@
 # n8n-nodes-ollama-embeddings
 
 [![NPM Version](https://img.shields.io/npm/v/n8n-nodes-qwen-embedding)](https://www.npmjs.com/package/n8n-nodes-qwen-embedding)
-[![License](https://img.shields.io/npm/l/n8n-nodes-qwen-embedding)](https://github.com/theseedship/deposium_n8n_embeddings_integration/blob/master/LICENSE)
+[![License](https://img.shields.io/npm/l/n8n-nodes-qwen-embedding)](https://github.com/theseedship/n8n_embeddings_qwen3_integration/blob/master/LICENSE)
 [![n8n Community](https://img.shields.io/badge/n8n-community_node-orange)](https://n8n.io/integrations)
 
 n8n community nodes for generating text embeddings via Ollama with your n8n workflows. Supports multiple embedding models including **Qwen**, **EmbeddingGemma**, **Nomic** and more for vector stores, similarity search, and AI applications.
@@ -423,7 +423,7 @@ ollama list
 ## 🔗 Links
 
 - [NPM Package](https://www.npmjs.com/package/n8n-nodes-qwen-embedding)
-- [GitHub Repository](https://github.com/theseedship/deposium_n8n_embeddings_integration)
+- [GitHub Repository](https://github.com/theseedship/n8n_embeddings_qwen3_integration)
 - [Troubleshooting Guide](docs/HTTP_405_TROUBLESHOOTING.md)
 - [n8n Community Nodes](https://n8n.io/integrations)
 - [Qwen3-Embedding Paper](https://arxiv.org/abs/2411.00156)
@@ -432,7 +432,7 @@ ollama list
 ## 📮 Support
 
 For issues and questions:
-- [GitHub Issues](https://github.com/theseedship/deposium_n8n_embeddings_integration/issues)
+- [GitHub Issues](https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues)
 - [n8n Community Forum](https://community.n8n.io/)
 
 ---

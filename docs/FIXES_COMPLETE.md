@@ -184,7 +184,7 @@ gh release create v0.3.4 \
 ```
 
 **Ou via interface GitHub:**
-- Aller sur https://github.com/theseedship/deposium_n8n_embeddings_integration/releases
+- Aller sur https://github.com/theseedship/n8n_embeddings_qwen3_integration/releases
 - Créer nouvelle release
 - Tag: `v0.3.4`
 - Description: Copier depuis CHANGELOG.md
@@ -210,7 +210,7 @@ code --install-extension greptile.greptile
 **Configuration recommandée:** `.greptile/config.json`
 ```json
 {
-  "repository": "theseedship/deposium_n8n_embeddings_integration",
+  "repository": "theseedship/n8n_embeddings_qwen3_integration",
   "codeReviewRules": [
     "Check Ollama API endpoint format",
     "Verify request body uses 'input' not 'prompt'",
@@ -294,7 +294,7 @@ describe('QwenEmbeddingTool', () => {
 - [README.md](README.md) - Documentation du package
 - [DOCKER_SETUP.md](DOCKER_SETUP.md) - Setup Ollama local
 
-**Issues GitHub:** https://github.com/theseedship/deposium_n8n_embeddings_integration/issues
+**Issues GitHub:** https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues
 
 ---
 

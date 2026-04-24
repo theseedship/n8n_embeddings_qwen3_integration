@@ -547,7 +547,7 @@ Attempt 4+: Wait 5s (capped at 5000ms)
 ### References
 
 - Ollama API Documentation: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings
-- Bug Reports: https://github.com/theseedship/deposium_n8n_embeddings_integration/issues
+- Bug Reports: https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues
 
 ## [0.3.2] - Previous Release
 
@@ -596,7 +596,7 @@ See [OLLAMA_GPU_N8N.md](../deposium-local/docs/OLLAMA_GPU_N8N.md) for GPU setup 
 
 ## Support
 
-- **Issues**: https://github.com/theseedship/deposium_n8n_embeddings_integration/issues
+- **Issues**: https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues
 - **Documentation**: See README.md
 - **Ollama Setup**: See DOCKER_SETUP.md
 

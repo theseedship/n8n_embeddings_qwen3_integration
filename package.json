@@ -20,17 +20,17 @@
     "multi-model"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/theseedship/deposium_n8n_embeddings_integration",
+  "homepage": "https://github.com/theseedship/n8n_embeddings_qwen3_integration",
   "author": {
     "name": "Gabriel Zimmermann",
     "email": "gabzim@users.noreply.github.com"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/theseedship/deposium_n8n_embeddings_integration.git"
+    "url": "git+https://github.com/theseedship/n8n_embeddings_qwen3_integration.git"
   },
   "bugs": {
-    "url": "https://github.com/theseedship/deposium_n8n_embeddings_integration/issues"
+    "url": "https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues"
   },
   "engines": {
     "node": ">=20.15"

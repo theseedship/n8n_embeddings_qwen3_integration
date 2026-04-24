@@ -488,7 +488,7 @@ The performance mode auto-detection correctly identified GPU:
 
 - **Ollama API Documentation:** https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddingsdocker run --rm -v deposium-local_n8n_data:/data alpine sh -c 'rm -rf /data/.cache/\* && rm -rf /data/nodes/node_modules/n8n-nodes-qwen-embedding'
 - **N8N Custom Nodes:** https://docs.n8n.io/integrations/creating-nodes/
-- **Bug Tracker:** https://github.com/theseedship/deposium_n8n_embeddings_integration/issues
+- **Bug Tracker:** https://github.com/theseedship/n8n_embeddings_qwen3_integration/issues
 
 ## Version History
 
